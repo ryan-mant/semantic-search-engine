@@ -1,0 +1,30 @@
+[project]
+name = "motor-ingestao-busca-worker"
+version = "0.1.0"
+description = "Worker for motor-ingestao-busca"
+authors = [
+    {name = "ryan-mant", email = "ryan.tuglife@hotmail.com"}
+]
+requires-python = ">=3.14"
+dependencies = [
+    "confluent-kafka (>=2.3.0)",
+    "pydantic (>=2.0.0)",
+    "pydantic-settings (>=2.0.0)"
+]
+
+[tool.poetry]
+packages = [{include = "src", from = "../API"}]
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.1.1,<10.0.0)"
+]
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "."
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
