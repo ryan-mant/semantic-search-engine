@@ -12,7 +12,16 @@ services:
   api:
     build:
       context: .
-      dockerfile: api/Dockerfile
+      dockerfile: API/Dockerfile
+    depends_on:
+      - mongodb
+      - kafka
+
+  api-test:
+    build:
+      context: .
+      dockerfile: API/Dockerfile
+      target: development
     depends_on:
       - mongodb
       - kafka
@@ -21,5 +30,13 @@ services:
     build:
       context: .
       dockerfile: worker/Dockerfile
+    depends_on:
+      - kafka
+
+  worker-test:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+      target: development
     depends_on:
       - kafka
