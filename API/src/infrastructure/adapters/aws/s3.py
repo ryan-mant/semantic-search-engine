@@ -10,6 +10,8 @@ from src.infrastructure.config.settings import Settings
 class S3StorageAdapter(StoragePort):
     def __init__(self, settings: Settings) -> None:
         self._bucket_name = settings.aws.s3_bucket
+        if not self._bucket_name:
+            raise StorageError("S3 bucket name is not configured. Please set the AWS_S3_BUCKET environment variable.")
         
         client_kwargs = {
             "region_name": settings.aws.region
