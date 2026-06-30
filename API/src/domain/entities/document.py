@@ -2,7 +2,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-@dataclass
+
+@dataclass(frozen=True)
 class Document:
     content: str
     metadata: Dict[str, Any]
