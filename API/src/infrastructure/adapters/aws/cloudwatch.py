@@ -15,6 +15,8 @@ class CloudWatchLoggerAdapter(LoggerPort):
     def __init__(self, settings: Settings) -> None:
         self._log_group = settings.aws.cloudwatch_log_group
         self._log_stream = settings.aws.cloudwatch_log_stream
+        if not self._log_group or not self._log_stream:
+            raise LoggingError("CloudWatch log group and stream must be configured. Please set the AWS_CLOUDWATCH_LOG_GROUP and AWS_CLOUDWATCH_LOG_STREAM environment variables.")
         self._lock = threading.Lock()
         self._sequence_token: Optional[str] = None
 
