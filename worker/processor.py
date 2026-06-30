@@ -1,0 +1,42 @@
+import json
+import logging
+from typing import Any
+
+from confluent_kafka import Message
+
+from src.domain.entities.document import Document
+
+
+class MessageProcessor:
+    def process_message(self, msg: Message) -> None:
+        """
+        Processes a single message from Kafka.
+        """
+        try:
+            data = self._decode_message(msg)
+            document = self._create_document(data)
+            self._log_document(document)
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to decode JSON message: {e} | Raw message: {msg.value()}")
+        except (TypeError, KeyError) as e:
+            logging.error(f"Failed to create document from data: {e} | Data: {data}")
+        except Exception as e:
+            logging.error(f"An unexpected error occurred while processing message: {e}")
+
+    def _decode_message(self, msg: Message) -> Any:
+        """Decodes the message value from bytes to a Python object."""
+        return json.loads(msg.value().decode('utf-8'))
+
+    def _create_document(self, data: Any) -> Document:
+        """Creates a Document entity from the message data."""
+        return Document(**data)
+
+    def _log_document(self, document: Document) -> None:
+        """Logs the processed document in a structured way."""
+        logging.info(
+            "Successfully processed document",
+            extra={
+                "document_id": document.id,
+                "created_at": document.created_at.isoformat(),
+            },
+        )
