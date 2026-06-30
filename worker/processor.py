@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime
 from typing import Any
 
 from confluent_kafka import Message
@@ -29,7 +30,14 @@ class MessageProcessor:
 
     def _create_document(self, data: Any) -> Document:
         """Creates a Document entity from the message data."""
-        return Document(**data)
+        data_copy = data.copy() if isinstance(data, dict) else {}
+        if "created_at" in data_copy and isinstance(data_copy["created_at"], str):
+            try:
+                iso_str = data_copy["created_at"].replace("Z", "+00:00")
+                data_copy["created_at"] = datetime.fromisoformat(iso_str)
+            except ValueError:
+                pass
+        return Document(**data_copy)
 
     def _log_document(self, document: Document) -> None:
         """Logs the processed document in a structured way."""
