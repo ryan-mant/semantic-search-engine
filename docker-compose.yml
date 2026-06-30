@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    # ... (configurações do Kafka) ...
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    depends_on:
+      - mongodb
+      - kafka
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    depends_on:
+      - kafka

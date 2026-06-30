@@ -1,0 +1,21 @@
+# Diretrizes de Desenvolvimento (Enterprise-Grade)
+
+- **Arquitetura**: Seguir rigorosamente o padrão Hexagonal (Ports & Adapters).
+- **Código**:
+    - Usar tipagem estrita (typing) em todas as funções/métodos.
+    - Aplicar injeção de dependência via construtor.
+    - Não ler variáveis de ambiente diretamente nas classes (injetar via objeto Settings).
+    - Usar logs estruturados para observabilidade.
+    - Seguir princípios SOLID.
+    - Utilizar Dataclasses imutáveis (`frozen=True`) para entidades de domínio.
+    - Utilizar Pydantic para validação de dados de entrada (DTOs).
+    - Seguir o padrão PEP 8 e manter legibilidade (limite de 80-100 colunas).
+- **Tratamento de Erros**:
+    - Nunca usar blocos try-except genéricos.
+    - Propagar exceções customizadas de domínio.
+    - Tratar falhas de conexão/timeout com exceções específicas de infraestrutura.
+- **Estilo**:
+    - Código minimalista, limpo e direto.
+    - SEM comentários óbvios.
+    - SEM introduções ou conclusões verbosas.
+    - APENAS código Python.
