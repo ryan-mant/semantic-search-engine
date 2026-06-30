@@ -42,7 +42,7 @@ class MongoDocumentRepository(DocumentRepository):
                     "created_at": document.created_at,
                 }
                 result = await self._collection.insert_one(insert_data)
-                document.id = str(result.inserted_id)
+                object.__setattr__(document, "id", str(result.inserted_id))
         except (ConnectionFailure, ServerSelectionTimeoutError) as e:
             raise DatabaseConnectionError(f"Database connection or timeout failure: {e}") from e
         except PyMongoError as e:
