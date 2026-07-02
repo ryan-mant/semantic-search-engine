@@ -1,7 +1,6 @@
 import sys
 from unittest.mock import MagicMock
 
-# Mock external libraries not available in the host environment
 sys.modules["sentence_transformers"] = MagicMock()
 sys.modules["chromadb"] = MagicMock()
 
@@ -288,7 +287,6 @@ def test_main_success() -> None:
         mock_consumer_cls.assert_called_once()
         mock_wrapper_instance.start.assert_called_once()
         
-        # Verify that SIGINT and SIGTERM handlers were registered for handle_shutdown
         shutdown_calls = [
             call for call in mock_signal.call_args_list 
             if call[0][0] in (py_signal.SIGINT, py_signal.SIGTERM)
