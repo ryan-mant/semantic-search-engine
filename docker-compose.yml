@@ -1,42 +1,152 @@
-version: '3.8'
 services:
   mongodb:
     image: mongo:latest
     ports:
       - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: "${MONGO_USERNAME}"
+      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_PASSWORD}"
+      MONGO_INITDB_DATABASE: "${MONGO_DATABASE}"
+    volumes:
+      - mongo_data:/data/db
 
   kafka:
-    image: confluentinc/cp-kafka:latest
-    # ... (configurações do Kafka) ...
+    image: confluentinc/cp-kafka:7.6.0
+    ports:
+      - "9092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://:9092,CONTROLLER://:29093,PLAINTEXT_HOST://:29092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,logs
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - localstack_data:/var/lib/localstack
 
   api:
     build:
       context: .
       dockerfile: API/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      MONGO_URI: "${MONGO_URI}"
+      MONGO_DATABASE: "${MONGO_DATABASE}"
+      MONGO_USERNAME: "${MONGO_USERNAME}"
+      MONGO_PASSWORD: "${MONGO_PASSWORD}"
+      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS}"
+      CHROMA_HOST: "${CHROMA_HOST}"
+      CHROMA_PORT: "${CHROMA_PORT}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_S3_BUCKET: "${AWS_S3_BUCKET}"
+      AWS_CLOUDWATCH_LOG_GROUP: "${AWS_CLOUDWATCH_LOG_GROUP}"
+      AWS_CLOUDWATCH_LOG_STREAM: "${AWS_CLOUDWATCH_LOG_STREAM}"
+      AWS_ENDPOINT_URL: "${AWS_ENDPOINT_URL}"
     depends_on:
       - mongodb
       - kafka
+      - chroma
+      - localstack
 
   api-test:
     build:
       context: .
       dockerfile: API/Dockerfile
       target: development
+    environment:
+      MONGO_URI: "${MONGO_URI}"
+      MONGO_DATABASE: "${MONGO_DATABASE}"
+      MONGO_USERNAME: "${MONGO_USERNAME}"
+      MONGO_PASSWORD: "${MONGO_PASSWORD}"
+      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS}"
+      CHROMA_HOST: "${CHROMA_HOST}"
+      CHROMA_PORT: "${CHROMA_PORT}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_S3_BUCKET: "${AWS_S3_BUCKET}"
+      AWS_CLOUDWATCH_LOG_GROUP: "${AWS_CLOUDWATCH_LOG_GROUP}"
+      AWS_CLOUDWATCH_LOG_STREAM: "${AWS_CLOUDWATCH_LOG_STREAM}"
+      AWS_ENDPOINT_URL: "${AWS_ENDPOINT_URL}"
     depends_on:
       - mongodb
       - kafka
+      - chroma
+      - localstack
 
   worker:
     build:
       context: .
       dockerfile: worker/Dockerfile
+    environment:
+      MONGO_URI: "${MONGO_URI}"
+      MONGO_DATABASE: "${MONGO_DATABASE}"
+      MONGO_USERNAME: "${MONGO_USERNAME}"
+      MONGO_PASSWORD: "${MONGO_PASSWORD}"
+      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS}"
+      CHROMA_HOST: "${CHROMA_HOST}"
+      CHROMA_PORT: "${CHROMA_PORT}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_S3_BUCKET: "${AWS_S3_BUCKET}"
+      AWS_CLOUDWATCH_LOG_GROUP: "${AWS_CLOUDWATCH_LOG_GROUP}"
+      AWS_CLOUDWATCH_LOG_STREAM: "${AWS_CLOUDWATCH_LOG_STREAM}"
+      AWS_ENDPOINT_URL: "${AWS_ENDPOINT_URL}"
     depends_on:
       - kafka
+      - mongodb
+      - chroma
+      - localstack
 
   worker-test:
     build:
       context: .
       dockerfile: worker/Dockerfile
       target: development
+    environment:
+      MONGO_URI: "${MONGO_URI}"
+      MONGO_DATABASE: "${MONGO_DATABASE}"
+      MONGO_USERNAME: "${MONGO_USERNAME}"
+      MONGO_PASSWORD: "${MONGO_PASSWORD}"
+      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS}"
+      CHROMA_HOST: "${CHROMA_HOST}"
+      CHROMA_PORT: "${CHROMA_PORT}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      AWS_S3_BUCKET: "${AWS_S3_BUCKET}"
+      AWS_CLOUDWATCH_LOG_GROUP: "${AWS_CLOUDWATCH_LOG_GROUP}"
+      AWS_CLOUDWATCH_LOG_STREAM: "${AWS_CLOUDWATCH_LOG_STREAM}"
+      AWS_ENDPOINT_URL: "${AWS_ENDPOINT_URL}"
     depends_on:
       - kafka
+      - mongodb
+      - chroma
+      - localstack
+
+volumes:
+  mongo_data:
+  chroma_data:
+  localstack_data:
