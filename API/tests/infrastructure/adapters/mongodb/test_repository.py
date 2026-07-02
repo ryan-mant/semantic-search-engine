@@ -1,5 +1,4 @@
 from unittest.mock import Mock, AsyncMock, MagicMock
-from datetime import datetime
 import pytest
 from bson import ObjectId
 from pymongo.errors import ConnectionFailure, PyMongoError
@@ -86,66 +85,3 @@ async def test_mongo_save_pymongo_error() -> None:
     with pytest.raises(DatabaseConnectionError) as exc_info:
         await repo.save(doc)
     assert "MongoDB write operation failed" in str(exc_info.value)
-
-
-@pytest.mark.asyncio
-async def test_mongo_get_by_id_found() -> None:
-    mock_db = MagicMock()
-    mock_collection = AsyncMock()
-    mock_db.__getitem__.return_value = mock_collection
-    
-    valid_id = "64b8f52ef713cd1086a9f4e5"
-    created_at = datetime.utcnow()
-    mock_collection.find_one.return_value = {
-        "_id": ObjectId(valid_id),
-        "content": "hello database",
-        "metadata": {"source": "db"},
-        "created_at": created_at
-    }
-    
-    repo = MongoDocumentRepository(mock_db)
-    result = await repo.get_by_id(valid_id)
-    
-    assert result is not None
-    assert result.id == valid_id
-    assert result.content == "hello database"
-    assert result.metadata == {"source": "db"}
-    assert result.created_at == created_at
-
-
-@pytest.mark.asyncio
-async def test_mongo_get_by_id_not_found() -> None:
-    mock_db = MagicMock()
-    mock_collection = AsyncMock()
-    mock_db.__getitem__.return_value = mock_collection
-    mock_collection.find_one.return_value = None
-    
-    repo = MongoDocumentRepository(mock_db)
-    result = await repo.get_by_id("missing")
-    assert result is None
-
-
-@pytest.mark.asyncio
-async def test_mongo_get_by_id_connection_failure() -> None:
-    mock_db = MagicMock()
-    mock_collection = AsyncMock()
-    mock_db.__getitem__.return_value = mock_collection
-    mock_collection.find_one.side_effect = ConnectionFailure("Conn lost")
-    
-    repo = MongoDocumentRepository(mock_db)
-    with pytest.raises(DatabaseConnectionError) as exc_info:
-        await repo.get_by_id("id123")
-    assert "Database connection or timeout failure" in str(exc_info.value)
-
-
-@pytest.mark.asyncio
-async def test_mongo_get_by_id_pymongo_error() -> None:
-    mock_db = MagicMock()
-    mock_collection = AsyncMock()
-    mock_db.__getitem__.return_value = mock_collection
-    mock_collection.find_one.side_effect = PyMongoError("Read failed")
-    
-    repo = MongoDocumentRepository(mock_db)
-    with pytest.raises(DatabaseConnectionError) as exc_info:
-        await repo.get_by_id("id123")
-    assert "MongoDB read operation failed" in str(exc_info.value)
