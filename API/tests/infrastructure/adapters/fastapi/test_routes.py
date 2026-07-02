@@ -1,7 +1,6 @@
 import sys
 from unittest.mock import Mock, AsyncMock, MagicMock, patch
 
-# Mock external libraries not available in the host environment
 sys.modules["sentence_transformers"] = MagicMock()
 sys.modules["chromadb"] = MagicMock()
 
