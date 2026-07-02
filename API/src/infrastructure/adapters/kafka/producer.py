@@ -9,21 +9,12 @@ from src.domain.exceptions import EventPublishingError
 
 
 class KafkaEventPublisher(EventPublisher):
-    """
-    Kafka implementation of the EventPublisher port using confluent-kafka.
-    """
 
     def __init__(self, producer: Producer, topic: str) -> None:
-        """
-        Initializes the publisher with a confluent-kafka Producer instance and a target topic.
-        """
         self._producer = producer
         self._topic = topic
 
     def _serialize_document(self, document: Document) -> str:
-        """
-        Serializes a Document entity into a JSON string.
-        """
         try:
             document_dict: Dict[str, Any] = {
                 "id": document.id,
@@ -36,10 +27,6 @@ class KafkaEventPublisher(EventPublisher):
             raise EventPublishingError(f"Failed to serialize document: {e}") from e
 
     async def publish_document_created(self, document: Document) -> None:
-        """
-        Publishes a document created event to the Kafka topic.
-        Blocks asynchronously until delivery acknowledgement is received.
-        """
         serialized_data = self._serialize_document(document)
         
         delivery_errors = []
