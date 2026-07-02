@@ -5,7 +5,6 @@ from src.domain.ports.embedding import EmbeddingPort
 
 
 class SentenceTransformerEmbeddingAdapter(EmbeddingPort):
-    """Adapter for generating embeddings using sentence-transformers model."""
 
     def __init__(self, model: SentenceTransformer) -> None:
         self._model = model
