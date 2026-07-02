@@ -6,8 +6,6 @@ import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "API")))
-
 os.environ.setdefault("AWS_ACCESS_KEY_ID", "dummy_key")
 os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "dummy_secret")
 os.environ.setdefault("AWS_S3_BUCKET", "dummy-bucket")
