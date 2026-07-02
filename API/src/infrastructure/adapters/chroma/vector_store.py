@@ -6,7 +6,6 @@ from src.domain.ports.vector_store import VectorStorePort
 
 
 class ChromaVectorStoreAdapter(VectorStorePort):
-    """Adapter for vector database operations using ChromaDB."""
 
     def __init__(
         self, client: chromadb.ClientAPI, collection_name: str = "documents"
