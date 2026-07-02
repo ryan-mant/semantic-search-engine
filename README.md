@@ -84,18 +84,19 @@ graph TD
     FastAPI -->|13. Return Matches| User
 ```
 
-### 📦 Hexagonal Layer Structure
+### 📦 Monorepo & Hexagonal Layer Structure
 
-* **Domain Layer (Core)**: Completely isolated from frameworks, containing core entities (e.g. [Document](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/entities/document.py)), domain exceptions, and abstract ports:
-  - [LoggerPort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/logger.py)
-  - [StoragePort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/storage.py)
-  - [EventPublisher](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/event_publisher.py)
-  - [DocumentRepository](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/document_repository.py)
-  - [EmbeddingPort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/embedding.py)
-  - [VectorStorePort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/vector_store.py)
-* **Application Layer**: Contains use cases coordinating the domain model (e.g. [IngestDocumentUseCase](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/application/use_cases/ingest_document.py)).
-* **Infrastructure Layer**: Framework-specific adapters implementing the domain ports (MongoDB, confluent-kafka, AWS S3, AWS CloudWatch, ChromaDB).
-* **Structured Logging**: Outputs JSON-formatted logs to stdout and AWS CloudWatch for modern observability.
+This repository is organized as a monorepo containing two **completely decoupled and self-contained microservices** that share no build-time code or runtime dependencies, ensuring high autonomy:
+1. **API Service ([API/](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API))**: Exposes REST ingestion and search routes.
+2. **Worker Service ([worker/](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/worker))**: Consumes raw documents from Kafka, generates vector representations, and indexes them in ChromaDB.
+
+Both microservices implement their own isolated **Hexagonal Architecture (Ports & Adapters)** layer structure:
+
+* **Domain Layer (Core)**: Completely isolated from frameworks, containing core entities (e.g., [Document](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/entities/document.py) in the API, and [Document](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/worker/src/domain/entities/document.py) in the Worker), exceptions, and abstract ports:
+  - API ports: [StoragePort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/storage.py), [EventPublisher](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/event_publisher.py), [DocumentRepository](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/document_repository.py), [EmbeddingPort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/embedding.py), [VectorStorePort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/vector_store.py).
+  - Worker ports: [DocumentRepository](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/worker/src/domain/ports/document_repository.py), [EmbeddingPort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/worker/src/domain/ports/embedding.py), [VectorStorePort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/worker/src/domain/ports/vector_store.py).
+* **Application Layer**: Contains use cases coordinating the domain model (e.g. [IngestDocumentUseCase](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/application/use_cases/ingest_document.py) and [SearchDocumentsUseCase](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/application/use_cases/search_documents.py)).
+* **Infrastructure Layer**: Framework-specific adapters implementing the domain ports (MongoDB, confluent-kafka, AWS S3, ChromaDB).
 * **Resilient Worker Loop**: The Kafka consumer includes fallback handling to guarantee that processing errors on a single message do not block or crash the consumer daemon.
 
 ---
