@@ -35,7 +35,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.settings = settings
 
-    # Initialize Chroma client and SentenceTransformer model
     app.state.chroma_client = chromadb.HttpClient(
         host=settings.chroma.host,
         port=settings.chroma.port
