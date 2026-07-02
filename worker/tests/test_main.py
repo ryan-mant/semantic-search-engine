@@ -1,10 +1,34 @@
 import sys
+from unittest.mock import MagicMock
+
+# Mock external libraries not available in the host environment
+sys.modules["sentence_transformers"] = MagicMock()
+sys.modules["chromadb"] = MagicMock()
+
 import json
 import pytest
-from unittest.mock import Mock, patch, ANY, MagicMock
+import signal as py_signal
+from unittest.mock import Mock, patch, ANY, MagicMock, AsyncMock
 from confluent_kafka import KafkaError, Message
 
 from main import ConsoleJsonLogger, KafkaMessageConsumer, WorkerSettings, main
+
+
+@pytest.fixture
+def repo_mock() -> AsyncMock:
+    return AsyncMock()
+
+
+@pytest.fixture
+def embedding_mock() -> AsyncMock:
+    mock = AsyncMock()
+    mock.generate.return_value = [0.1] * 384
+    return mock
+
+
+@pytest.fixture
+def vector_mock() -> AsyncMock:
+    return AsyncMock()
 
 
 def test_console_json_logger(capsys) -> None:
@@ -32,30 +56,36 @@ def test_console_json_logger(capsys) -> None:
     assert log_data["level"] == "DEBUG"
 
 
-def test_consumer_poll_none() -> None:
+@pytest.mark.asyncio
+async def test_consumer_poll_none(repo_mock, embedding_mock, vector_mock) -> None:
     consumer_mock = Mock()
     settings = WorkerSettings()
     logger_mock = Mock()
     
-    wrapper = KafkaMessageConsumer(consumer_mock, settings, logger_mock)
+    wrapper = KafkaMessageConsumer(
+        consumer_mock, settings, logger_mock, repo_mock, embedding_mock, vector_mock
+    )
     
     def poll_side_effect(timeout):
         wrapper._running = False
         return None
         
     consumer_mock.poll.side_effect = poll_side_effect
-    wrapper.start()
+    await wrapper.start()
     
     consumer_mock.subscribe.assert_called_once_with([settings.kafka.topic])
     consumer_mock.close.assert_called_once()
 
 
-def test_consumer_poll_partition_eof() -> None:
+@pytest.mark.asyncio
+async def test_consumer_poll_partition_eof(repo_mock, embedding_mock, vector_mock) -> None:
     consumer_mock = Mock()
     settings = WorkerSettings()
     logger_mock = Mock()
     
-    wrapper = KafkaMessageConsumer(consumer_mock, settings, logger_mock)
+    wrapper = KafkaMessageConsumer(
+        consumer_mock, settings, logger_mock, repo_mock, embedding_mock, vector_mock
+    )
     
     msg_mock = Mock(spec=Message)
     err_mock = Mock()
@@ -67,17 +97,20 @@ def test_consumer_poll_partition_eof() -> None:
         return msg_mock
         
     consumer_mock.poll.side_effect = poll_side_effect
-    wrapper.start()
+    await wrapper.start()
     
     logger_mock.error.assert_not_called()
 
 
-def test_consumer_poll_kafka_error() -> None:
+@pytest.mark.asyncio
+async def test_consumer_poll_kafka_error(repo_mock, embedding_mock, vector_mock) -> None:
     consumer_mock = Mock()
     settings = WorkerSettings()
     logger_mock = Mock()
     
-    wrapper = KafkaMessageConsumer(consumer_mock, settings, logger_mock)
+    wrapper = KafkaMessageConsumer(
+        consumer_mock, settings, logger_mock, repo_mock, embedding_mock, vector_mock
+    )
     
     msg_mock = Mock(spec=Message)
     err_mock = MagicMock()
@@ -90,7 +123,7 @@ def test_consumer_poll_kafka_error() -> None:
         return msg_mock
         
     consumer_mock.poll.side_effect = poll_side_effect
-    wrapper.start()
+    await wrapper.start()
     
     logger_mock.error.assert_called_once_with(
         "Kafka error: connection timeout",
@@ -98,12 +131,15 @@ def test_consumer_poll_kafka_error() -> None:
     )
 
 
-def test_consumer_poll_empty_payload() -> None:
+@pytest.mark.asyncio
+async def test_consumer_poll_empty_payload(repo_mock, embedding_mock, vector_mock) -> None:
     consumer_mock = Mock()
     settings = WorkerSettings()
     logger_mock = Mock()
     
-    wrapper = KafkaMessageConsumer(consumer_mock, settings, logger_mock)
+    wrapper = KafkaMessageConsumer(
+        consumer_mock, settings, logger_mock, repo_mock, embedding_mock, vector_mock
+    )
     
     msg_mock = Mock(spec=Message)
     msg_mock.error.return_value = None
@@ -114,17 +150,20 @@ def test_consumer_poll_empty_payload() -> None:
         return msg_mock
         
     consumer_mock.poll.side_effect = poll_side_effect
-    wrapper.start()
+    await wrapper.start()
     
     logger_mock.warning.assert_called_once_with("Empty payload received")
 
 
-def test_consumer_poll_valid_payload() -> None:
+@pytest.mark.asyncio
+async def test_consumer_poll_valid_payload(repo_mock, embedding_mock, vector_mock) -> None:
     consumer_mock = Mock()
     settings = WorkerSettings()
     logger_mock = Mock()
     
-    wrapper = KafkaMessageConsumer(consumer_mock, settings, logger_mock)
+    wrapper = KafkaMessageConsumer(
+        consumer_mock, settings, logger_mock, repo_mock, embedding_mock, vector_mock
+    )
     
     msg_mock = Mock(spec=Message)
     msg_mock.error.return_value = None
@@ -141,7 +180,15 @@ def test_consumer_poll_valid_payload() -> None:
         return msg_mock
         
     consumer_mock.poll.side_effect = poll_side_effect
-    wrapper.start()
+    await wrapper.start()
+    
+    repo_mock.save.assert_called_once()
+    embedding_mock.generate.assert_called_once_with("document text")
+    vector_mock.upsert.assert_called_once_with(
+        doc_id="doc-123",
+        vector=ANY,
+        metadata={"content": "document text", "source": "kafka"}
+    )
     
     logger_mock.info.assert_any_call(
         "Document processed successfully",
@@ -156,12 +203,15 @@ def test_consumer_poll_valid_payload() -> None:
     )
 
 
-def test_consumer_poll_invalid_date() -> None:
+@pytest.mark.asyncio
+async def test_consumer_poll_invalid_date(repo_mock, embedding_mock, vector_mock) -> None:
     consumer_mock = Mock()
     settings = WorkerSettings()
     logger_mock = Mock()
     
-    wrapper = KafkaMessageConsumer(consumer_mock, settings, logger_mock)
+    wrapper = KafkaMessageConsumer(
+        consumer_mock, settings, logger_mock, repo_mock, embedding_mock, vector_mock
+    )
     
     msg_mock = Mock(spec=Message)
     msg_mock.error.return_value = None
@@ -178,18 +228,21 @@ def test_consumer_poll_invalid_date() -> None:
         return msg_mock
         
     consumer_mock.poll.side_effect = poll_side_effect
-    wrapper.start()
+    await wrapper.start()
     
     called_args = [args[0] for args, kwargs in logger_mock.info.call_args_list]
     assert "Document processed successfully" in called_args
 
 
-def test_consumer_poll_processing_exception() -> None:
+@pytest.mark.asyncio
+async def test_consumer_poll_processing_exception(repo_mock, embedding_mock, vector_mock) -> None:
     consumer_mock = Mock()
     settings = WorkerSettings()
     logger_mock = Mock()
     
-    wrapper = KafkaMessageConsumer(consumer_mock, settings, logger_mock)
+    wrapper = KafkaMessageConsumer(
+        consumer_mock, settings, logger_mock, repo_mock, embedding_mock, vector_mock
+    )
     
     msg_mock = Mock(spec=Message)
     msg_mock.error.return_value = None
@@ -202,7 +255,7 @@ def test_consumer_poll_processing_exception() -> None:
         return msg_mock
         
     consumer_mock.poll.side_effect = poll_side_effect
-    wrapper.start()
+    await wrapper.start()
     
     logger_mock.error.assert_called_once_with(
         "Error processing message",
@@ -220,16 +273,28 @@ def test_main_success() -> None:
     mock_consumer_cls.return_value = mock_consumer_instance
     
     mock_wrapper_instance = Mock()
+    mock_wrapper_instance.start = AsyncMock()
     
     with patch("main.Consumer", mock_consumer_cls), \
          patch("main.KafkaMessageConsumer", return_value=mock_wrapper_instance), \
-         patch("signal.signal") as mock_signal:
+         patch("motor.motor_asyncio.AsyncIOMotorClient"), \
+         patch("sentence_transformers.SentenceTransformer"), \
+         patch("chromadb.HttpClient"), \
+         patch("main.signal.signal") as mock_signal:
          
-        main()
+        import asyncio
+        asyncio.run(main())
         
         mock_consumer_cls.assert_called_once()
         mock_wrapper_instance.start.assert_called_once()
-        assert mock_signal.call_count == 2
+        
+        # Verify that SIGINT and SIGTERM handlers were registered for handle_shutdown
+        shutdown_calls = [
+            call for call in mock_signal.call_args_list 
+            if call[0][0] in (py_signal.SIGINT, py_signal.SIGTERM)
+            and "handle_shutdown" in str(call[0][1])
+        ]
+        assert len(shutdown_calls) == 2
 
 
 def test_main_consumer_failure() -> None:
@@ -237,9 +302,14 @@ def test_main_consumer_failure() -> None:
     mock_consumer_cls.side_effect = Exception("failed to initialize")
     
     with patch("main.Consumer", mock_consumer_cls), \
+         patch("motor.motor_asyncio.AsyncIOMotorClient"), \
+         patch("sentence_transformers.SentenceTransformer"), \
+         patch("chromadb.HttpClient"), \
+         patch("main.signal.signal"), \
          patch("sys.exit", side_effect=SystemExit(1)):
          
         with pytest.raises(SystemExit) as exc_info:
-            main()
+            import asyncio
+            asyncio.run(main())
             
         assert exc_info.value.code == 1
