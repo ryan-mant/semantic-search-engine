@@ -41,7 +41,6 @@ def test_cloudwatch_adapter_initialization_resource_exists() -> None:
     settings.aws.cloudwatch_log_stream = "my-stream"
 
     mock_cw_client = Mock()
-    # Mock exceptions.ResourceAlreadyExistsException
     class DummyResourceAlreadyExists(Exception):
         pass
     mock_cw_client.exceptions.ResourceAlreadyExistsException = DummyResourceAlreadyExists
@@ -84,7 +83,6 @@ def test_cloudwatch_adapter_log_methods_success() -> None:
     with patch("boto3.client", return_value=mock_cw_client):
         adapter = CloudWatchLoggerAdapter(settings)
         
-        # Test info log
         adapter.info("info message", {"key": "val"})
         mock_cw_client.put_log_events.assert_called_once()
         args, kwargs = mock_cw_client.put_log_events.call_args
@@ -95,7 +93,6 @@ def test_cloudwatch_adapter_log_methods_success() -> None:
         assert "info message" in kwargs["logEvents"][0]["message"]
         assert adapter._sequence_token == "token-456"
 
-        # Test other level logging
         mock_cw_client.put_log_events.reset_mock()
         adapter.error("error message")
         args, kwargs = mock_cw_client.put_log_events.call_args
@@ -125,7 +122,6 @@ def test_cloudwatch_adapter_invalid_sequence_token_exception() -> None:
         ]
     }
     
-    # Define custom InvalidSequenceTokenException
     class DummyInvalidSequenceToken(Exception):
         def __init__(self, response):
             self.response = response
@@ -133,7 +129,6 @@ def test_cloudwatch_adapter_invalid_sequence_token_exception() -> None:
 
     mock_cw_client.exceptions.InvalidSequenceTokenException = DummyInvalidSequenceToken
     
-    # First call to put_log_events raises DummyInvalidSequenceToken
     exc_response = {"expectedSequenceToken": "expected-token-999"}
     mock_cw_client.put_log_events.side_effect = [
         DummyInvalidSequenceToken(exc_response),
@@ -145,7 +140,6 @@ def test_cloudwatch_adapter_invalid_sequence_token_exception() -> None:
         adapter.info("retry test")
         
         assert mock_cw_client.put_log_events.call_count == 2
-        # Check that the second call used "expected-token-999"
         first_call, second_call = mock_cw_client.put_log_events.call_args_list
         assert second_call.kwargs["sequenceToken"] == "expected-token-999"
         assert adapter._sequence_token == "token-next"
