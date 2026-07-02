@@ -35,6 +35,7 @@ graph TD
         SearchUC[SearchDocumentsUseCase]
         
         S3Adapter[S3StorageAdapter]
+        MongoRep_API[MongoDB Repository]
         KafkaPublisher[KafkaEventPublisher]
         ST_API[SentenceTransformer Adapter]
         ChromaStore_API[ChromaDB Adapter]
@@ -46,7 +47,7 @@ graph TD
 
     subgraph Worker [Worker Container]
         Consumer[Kafka Consumer]
-        MongoRep[MongoDB Repository]
+        MongoRep_Worker[MongoDB Repository]
         ST_Worker[SentenceTransformer Adapter]
         ChromaStore_Worker[ChromaDB Adapter]
     end
@@ -62,23 +63,25 @@ graph TD
     FastAPI -->|Executes| IngestUC
     IngestUC -->|2. Upload Stream| S3Adapter
     S3Adapter -->|Upload| S3
-    IngestUC -->|3. Publish Event| KafkaPublisher
+    IngestUC -->|3. Save Metadata| MongoRep_API
+    MongoRep_API -->|Save| Mongo
+    IngestUC -->|4. Publish Event| KafkaPublisher
     KafkaPublisher -->|Publish| Kafka
-    FastAPI -->|4. HTTP 201 Created| User
+    FastAPI -->|5. HTTP 201 Created| User
 
-    Kafka -->|5. Poll Events| Consumer
-    Consumer -->|6. Save Metadata| MongoRep
-    MongoRep -->|Save| Mongo
-    Consumer -->|7. Generate Vector| ST_Worker
-    Consumer -->|8. Index Vector| ChromaStore_Worker
+    Kafka -->|6. Poll Events| Consumer
+    Consumer -->|7. Save Metadata| MongoRep_Worker
+    MongoRep_Worker -->|Save| Mongo
+    Consumer -->|8. Generate Vector| ST_Worker
+    Consumer -->|9. Index Vector| ChromaStore_Worker
     ChromaStore_Worker -->|Upsert| Chroma
 
-    User -->|9. GET /documents/search?q=...| FastAPI
+    User -->|10. GET /documents/search?q=...| FastAPI
     FastAPI -->|Executes| SearchUC
-    SearchUC -->|10. Generate Query Vector| ST_API
-    SearchUC -->|11. Query Similar Vectors| ChromaStore_API
+    SearchUC -->|11. Generate Query Vector| ST_API
+    SearchUC -->|12. Query Similar Vectors| ChromaStore_API
     ChromaStore_API -->|Search| Chroma
-    FastAPI -->|12. Return Matches| User
+    FastAPI -->|13. Return Matches| User
 ```
 
 ### 📦 Hexagonal Layer Structure
