@@ -50,7 +50,6 @@ class KafkaEventPublisher(EventPublisher):
                 delivery_errors.append(err)
 
         try:
-            # Enqueue the message to Kafka local producer queue.
             self._producer.produce(
                 topic=self._topic,
                 key=str(document.id) if document.id else None,
