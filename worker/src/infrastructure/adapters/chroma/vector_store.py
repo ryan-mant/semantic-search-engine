@@ -34,29 +34,3 @@ class ChromaVectorStoreAdapter(VectorStorePort):
                 metadatas=[metadata]
             )
         )
-
-    async def search(
-        self, vector: List[float], top_k: int
-    ) -> List[Dict[str, Any]]:
-        loop = asyncio.get_running_loop()
-        collection = self._get_collection()
-        results = await loop.run_in_executor(
-            None,
-            lambda: collection.query(
-                query_embeddings=[vector],
-                n_results=top_k
-            )
-        )
-        formatted_results = []
-        if results and "ids" in results and results["ids"]:
-            ids = results["ids"][0]
-            metadatas = results.get("metadatas", [[]])[0] or [{}] * len(ids)
-            distances = results.get("distances", [[]])[0] or [0.0] * len(ids)
-            
-            for idx, doc_id in enumerate(ids):
-                formatted_results.append({
-                    "id": doc_id,
-                    "metadata": metadatas[idx],
-                    "score": distances[idx]
-                })
-        return formatted_results
