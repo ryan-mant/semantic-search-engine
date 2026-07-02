@@ -5,11 +5,15 @@ description = "Worker for motor-ingestao-busca"
 authors = [
     {name = "ryan-mant", email = "ryan.tuglife@hotmail.com"}
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
     "confluent-kafka (>=2.3.0)",
     "pydantic (>=2.0.0)",
-    "pydantic-settings (>=2.0.0)"
+    "pydantic-settings (>=2.0.0)",
+    "sentence-transformers (>=5.6.0,<6.0.0)",
+    "chromadb (>=1.5.9,<2.0.0)",
+    "motor (>=3.7.1,<4.0.0)",
+    "pymongo (>=4.17.0,<5.0.0)"
 ]
 
 [tool.poetry]
@@ -17,7 +21,8 @@ packages = [{include = "src", from = "../API"}]
 
 [dependency-groups]
 dev = [
-    "pytest (>=9.1.1,<10.0.0)"
+    "pytest (>=9.1.1,<10.0.0)",
+    "pytest-asyncio (>=1.4.0,<2.0.0)"
 ]
 
 [tool.pytest.ini_options]
