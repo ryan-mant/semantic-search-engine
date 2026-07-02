@@ -42,7 +42,6 @@ class KafkaEventPublisher(EventPublisher):
         """
         serialized_data = self._serialize_document(document)
         
-        # Local collection to capture delivery errors from the confluent-kafka background thread.
         delivery_errors = []
 
         def delivery_report(err: Any, msg: Any) -> None:
@@ -61,8 +60,6 @@ class KafkaEventPublisher(EventPublisher):
         except Exception as e:
             raise EventPublishingError(f"Failed to enqueue message to Kafka: {e}") from e
 
-        # flush() blocks waiting for all outstanding messages to be delivered.
-        # We run it in the loop executor to prevent blocking the main asyncio event loop.
         loop = asyncio.get_running_loop()
         try:
             await loop.run_in_executor(None, self._producer.flush)
