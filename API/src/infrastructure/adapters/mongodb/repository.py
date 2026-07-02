@@ -9,23 +9,12 @@ from src.domain.exceptions import DatabaseConnectionError
 
 
 class MongoDocumentRepository(DocumentRepository):
-    """
-    MongoDB implementation of the DocumentRepository port using Motor for async operations.
-    """
 
     def __init__(self, db: AsyncIOMotorDatabase, collection_name: str = "documents") -> None:
-        """
-        Initializes the repository with a Motor database instance and collection name.
-        """
         self._db = db
         self._collection = db[collection_name]
 
     async def save(self, document: Document) -> None:
-        """
-        Saves a Document entity to MongoDB.
-        If the document already has an id, it is upserted. Otherwise, a new record is inserted
-        and the generated id is assigned to the document entity.
-        """
         try:
             if document.id:
                 query = {"_id": ObjectId(document.id) if ObjectId.is_valid(document.id) else document.id}
@@ -49,10 +38,6 @@ class MongoDocumentRepository(DocumentRepository):
             raise DatabaseConnectionError(f"MongoDB write operation failed: {e}") from e
 
     async def get_by_id(self, document_id: str) -> Optional[Document]:
-        """
-        Retrieves a Document entity from MongoDB by its ID.
-        Returns None if no matching document is found.
-        """
         try:
             query = {"_id": ObjectId(document_id) if ObjectId.is_valid(document_id) else document_id}
             doc_dict = await self._collection.find_one(query)
