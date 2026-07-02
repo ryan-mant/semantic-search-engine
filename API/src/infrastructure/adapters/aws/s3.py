@@ -22,9 +22,17 @@ class S3StorageAdapter(StoragePort):
             client_kwargs["aws_secret_access_key"] = settings.aws.secret_access_key
         if settings.aws.session_token:
             client_kwargs["aws_session_token"] = settings.aws.session_token
+        if settings.aws.endpoint_url:
+            client_kwargs["endpoint_url"] = settings.aws.endpoint_url
 
         try:
             self._s3_client = boto3.client("s3", **client_kwargs)
+            if settings.aws.endpoint_url:
+                try:
+                    self._s3_client.create_bucket(Bucket=self._bucket_name)
+                except ClientError as e:
+                    if e.response["Error"]["Code"] not in ("BucketAlreadyExists", "BucketAlreadyOwnedByYou"):
+                        raise
         except (BotoCoreError, ClientError) as e:
             raise StorageError(f"Failed to initialize S3 client: {e}") from e
 
