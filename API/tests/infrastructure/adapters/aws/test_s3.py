@@ -13,6 +13,7 @@ def test_s3_adapter_initialization_success() -> None:
     settings.aws.access_key_id = "test-key"
     settings.aws.secret_access_key = "test-secret"
     settings.aws.session_token = "test-token"
+    settings.aws.endpoint_url = None
     
     with patch("boto3.client") as mock_client_factory:
         adapter = S3StorageAdapter(settings)
@@ -23,6 +24,27 @@ def test_s3_adapter_initialization_success() -> None:
             aws_access_key_id="test-key",
             aws_secret_access_key="test-secret",
             aws_session_token="test-token"
+        )
+
+
+def test_s3_adapter_initialization_with_endpoint_url() -> None:
+    settings = Settings()
+    settings.aws.s3_bucket = "test-bucket"
+    settings.aws.access_key_id = "test-key"
+    settings.aws.secret_access_key = "test-secret"
+    settings.aws.session_token = "test-token"
+    settings.aws.endpoint_url = "http://localhost:4566"
+    
+    with patch("boto3.client") as mock_client_factory:
+        adapter = S3StorageAdapter(settings)
+        assert adapter._bucket_name == "test-bucket"
+        mock_client_factory.assert_called_once_with(
+            "s3",
+            region_name="us-east-1",
+            aws_access_key_id="test-key",
+            aws_secret_access_key="test-secret",
+            aws_session_token="test-token",
+            endpoint_url="http://localhost:4566"
         )
 
 
