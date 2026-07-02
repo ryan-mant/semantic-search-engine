@@ -30,9 +30,9 @@ graph TD
     end
 
     subgraph API [Ingestion & Search API]
-        FastAPI[FastAPI Controller]
+        FastAPI[FastAPI Router / Controllers]
         IngestUC[IngestDocumentUseCase]
-        SearchAdapter[Search Controller]
+        SearchUC[SearchDocumentsUseCase]
     end
 
     subgraph Messaging [Event Broker]
@@ -69,8 +69,9 @@ graph TD
     ChromaStore -->|Upsert| Chroma
 
     User -->|9. GET /documents/search?q=...| FastAPI
-    FastAPI -->|10. Generate Query Vector| ST
-    FastAPI -->|11. Query Similar Vectors| ChromaStore
+    FastAPI -->|Executes| SearchUC
+    SearchUC -->|10. Generate Query Vector| ST
+    SearchUC -->|11. Query Similar Vectors| ChromaStore
     ChromaStore -->|Search| Chroma
     FastAPI -->|12. Return Matches| User
 ```
