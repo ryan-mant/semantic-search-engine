@@ -29,50 +29,55 @@ graph TD
         User([User / Client])
     end
 
-    subgraph API [Ingestion & Search API]
-        FastAPI[FastAPI Router / Controllers]
+    subgraph API [API Container]
+        FastAPI[FastAPI Router]
         IngestUC[IngestDocumentUseCase]
         SearchUC[SearchDocumentsUseCase]
+        
+        S3Adapter[S3StorageAdapter]
+        KafkaPublisher[KafkaEventPublisher]
+        ST_API[SentenceTransformer Adapter]
+        ChromaStore_API[ChromaDB Adapter]
     end
 
-    subgraph Messaging [Event Broker]
-        Kafka[Apache Kafka Broker]
+    subgraph Messaging [Apache Kafka]
+        Kafka[Kafka Broker]
     end
 
-    subgraph Worker [Asynchronous Processing Worker]
+    subgraph Worker [Worker Container]
         Consumer[Kafka Consumer]
-        ST[SentenceTransformer Adapter]
         MongoRep[MongoDB Repository]
-        ChromaStore[ChromaDB Vector Store Adapter]
+        ST_Worker[SentenceTransformer Adapter]
+        ChromaStore_Worker[ChromaDB Adapter]
     end
 
-    subgraph Storage [Storage & Infrastructure]
+    subgraph Databases & Storage [External Infrastructure]
         S3[(AWS S3 Storage)]
         Mongo[(MongoDB)]
         Chroma[(ChromaDB Vector DB)]
-        CW[(AWS CloudWatch Logs)]
     end
 
     %% Flows
     User -->|1. POST /documents/ingest| FastAPI
     FastAPI -->|Executes| IngestUC
-    IngestUC -->|2. Save Raw Document| S3
-    IngestUC -->|3. Publish Ingestion Event| Kafka
-    IngestUC -->|4. Log Event| CW
-    FastAPI -->|5. HTTP 201 Created| User
+    IngestUC -->|2. Upload Stream| S3Adapter
+    S3Adapter -->|Upload| S3
+    IngestUC -->|3. Publish Event| KafkaPublisher
+    KafkaPublisher -->|Publish| Kafka
+    FastAPI -->|4. HTTP 201 Created| User
 
-    Kafka -->|Consume Ingestion Event| Consumer
-    Consumer -->|6. Save Document Metadata| MongoRep
-    MongoRep -->|Persist| Mongo
-    Consumer -->|7. Generate Dense Vector| ST
-    Consumer -->|8. Index Vector & Metadata| ChromaStore
-    ChromaStore -->|Upsert| Chroma
+    Kafka -->|5. Poll Events| Consumer
+    Consumer -->|6. Save Metadata| MongoRep
+    MongoRep -->|Save| Mongo
+    Consumer -->|7. Generate Vector| ST_Worker
+    Consumer -->|8. Index Vector| ChromaStore_Worker
+    ChromaStore_Worker -->|Upsert| Chroma
 
     User -->|9. GET /documents/search?q=...| FastAPI
     FastAPI -->|Executes| SearchUC
-    SearchUC -->|10. Generate Query Vector| ST
-    SearchUC -->|11. Query Similar Vectors| ChromaStore
-    ChromaStore -->|Search| Chroma
+    SearchUC -->|10. Generate Query Vector| ST_API
+    SearchUC -->|11. Query Similar Vectors| ChromaStore_API
+    ChromaStore_API -->|Search| Chroma
     FastAPI -->|12. Return Matches| User
 ```
 
