@@ -4,10 +4,6 @@ from src.domain.ports.vector_store import VectorStorePort
 
 
 class SearchDocumentsUseCase:
-    """
-    Use case for performing semantic document searches.
-    Encapsulates the coordination between the EmbeddingPort and VectorStorePort.
-    """
 
     def __init__(
         self,
@@ -18,10 +14,6 @@ class SearchDocumentsUseCase:
         self._vector_store_port = vector_store_port
 
     async def execute(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
-        """
-        Executes the semantic search by generating query embeddings
-        and querying the vector store.
-        """
         if not query.strip():
             raise ValueError("Search query cannot be empty")
 
