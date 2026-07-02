@@ -1,5 +1,5 @@
 # ---- Build Stage ----
-FROM python:3.14-slim as builder
+FROM python:3.12-slim as builder
 
 # 1. Install build dependencies and poetry
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential librdkafka-dev
@@ -18,11 +18,12 @@ RUN poetry export --with dev -f requirements.txt --output requirements-dev.txt -
 RUN python -m venv /opt/venv
 
 # 5. Install production Python packages
+RUN /opt/venv/bin/pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 
 # ---- Test/Development Stage ----
-FROM python:3.14-slim as development
+FROM python:3.12-slim as development
 
 WORKDIR /app/worker
 
@@ -34,6 +35,7 @@ COPY --from=builder /opt/venv /opt/venv
 
 # 3. Install dev packages into the virtual env
 COPY --from=builder /app/requirements-dev.txt /app/requirements-dev.txt
+RUN /opt/venv/bin/pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN /opt/venv/bin/pip install --no-cache-dir -r /app/requirements-dev.txt
 
 # 4. Copy the code
@@ -49,7 +51,7 @@ CMD ["pytest"]
 
 
 # ---- Final Stage (Production) ----
-FROM python:3.14-slim as production
+FROM python:3.12-slim as production
 
 WORKDIR /app
 
