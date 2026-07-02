@@ -39,11 +39,10 @@ RUN /opt/venv/bin/pip install --no-cache-dir torch --index-url https://download.
 RUN /opt/venv/bin/pip install --no-cache-dir -r /app/requirements-dev.txt
 
 # 4. Copy the code
-COPY API/src /app/src
 COPY worker /app/worker
 
 # 5. Set the python path and activate virtual environment
-ENV PYTHONPATH /app
+ENV PYTHONPATH /app/worker
 ENV PATH="/opt/venv/bin:$PATH"
 
 # 6. Default command is pytest
@@ -61,14 +60,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends librdkafka1 && 
 # 2. Copy virtual env
 COPY --from=builder /opt/venv /opt/venv
 
-# 3. Copy the code, PRESERVING the directory structure
-COPY API/src /app/src
+# 3. Copy the code
 COPY worker /app/worker
 
-# 4. Set the python path to the project root
-ENV PYTHONPATH /app
+# 4. Set the python path to the worker directory
+ENV PYTHONPATH /app/worker
 # 5. Activate the virtual environment
 ENV PATH="/opt/venv/bin:$PATH"
 
 # 6. Run the worker from its directory
-CMD ["python", "-u", "worker/main.py"]
+CMD ["python", "-u", "/app/worker/main.py"]
