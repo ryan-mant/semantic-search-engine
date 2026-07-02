@@ -1,10 +1,52 @@
+# IDE / Editors
 .idea/
+.vscode/
+*.swp
+*.swo
+
+# Virtual Environments & Packages
 .venv/
+venv/
+env/
+ENV/
 __pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
 .pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Logs
 *.log
 logs/
+
+# OS Files
 .DS_Store
-.coverage
+Thumbs.db
+
+# Database / Local Docker Data / State
+data/
+*data/
+db_data/
+mongo_data/
+chroma_data/
+localstack_data/
+kafka_data/
+
+# Environment / Secret files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*
+!.env.example
+
+# Temporary / Local testing
 scratch/
 requirements-dev.txt
