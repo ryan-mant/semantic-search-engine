@@ -21,20 +21,6 @@ class ChromaVectorStoreAdapter(VectorStorePort):
             )
         return self._collection
 
-    async def upsert(
-        self, doc_id: str, vector: List[float], metadata: Dict[str, Any]
-    ) -> None:
-        loop = asyncio.get_running_loop()
-        collection = self._get_collection()
-        await loop.run_in_executor(
-            None,
-            lambda: collection.upsert(
-                ids=[doc_id],
-                embeddings=[vector],
-                metadatas=[metadata]
-            )
-        )
-
     async def search(
         self, vector: List[float], top_k: int
     ) -> List[Dict[str, Any]]:
