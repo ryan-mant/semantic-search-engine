@@ -1,7 +1,7 @@
 import time
 import json
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -29,7 +29,8 @@ class CloudWatchLoggerAdapter(LoggerPort):
             client_kwargs["aws_secret_access_key"] = settings.aws.secret_access_key
         if settings.aws.session_token:
             client_kwargs["aws_session_token"] = settings.aws.session_token
-
+        if settings.aws.endpoint_url:
+            client_kwargs["endpoint_url"] = settings.aws.endpoint_url
 
         try:
             self._client = boto3.client("logs", **client_kwargs)
@@ -65,7 +66,7 @@ class CloudWatchLoggerAdapter(LoggerPort):
 
     def _log(self, message: str, level: str, extra: Optional[Dict[str, Any]] = None) -> None:
         log_payload = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "level": level,
             "message": message,
             "extra": extra or {},
