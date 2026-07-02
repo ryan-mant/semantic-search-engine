@@ -172,11 +172,11 @@ Submits a document to be uploaded raw to S3 and queued in Kafka for async extrac
 * **Request Body**:
   ```json
   {
-    "content": "Artificial intelligence is transforming software engineering by automating repetitive tasks and proposing clean code structures.",
+    "content": "The company policy requires all employees to submit their monthly expense reports by the last Friday of each month.",
     "metadata": {
-      "user_id": "999",
-      "category": "technology",
-      "author": "Antigravity"
+      "user_id": "123",
+      "category": "finance",
+      "author": "John Doe"
     }
   }
   ```
@@ -184,17 +184,17 @@ Submits a document to be uploaded raw to S3 and queued in Kafka for async extrac
   ```bash
   curl -X POST http://localhost:8000/documents/ingest \
     -H "Content-Type: application/json" \
-    -d '{"content": "Artificial intelligence is transforming software engineering by automating repetitive tasks and proposing clean code structures.", "metadata": {"user_id": "999", "category": "technology", "author": "Antigravity"}}'
+    -d '{"content": "The company policy requires all employees to submit their monthly expense reports by the last Friday of each month.", "metadata": {"user_id": "123", "category": "finance", "author": "John Doe"}}'
   ```
 * **Response (201 Created)**:
   ```json
   {
     "id": "e0bfa934-8b64-4bf8-b99b-3ee9c27ee98d",
-    "content": "Artificial intelligence is transforming software engineering by automating repetitive tasks and proposing clean code structures.",
+    "content": "The company policy requires all employees to submit their monthly expense reports by the last Friday of each month.",
     "metadata": {
-      "user_id": "999",
-      "category": "technology",
-      "author": "Antigravity"
+      "user_id": "123",
+      "category": "finance",
+      "author": "John Doe"
     },
     "created_at": "2026-07-02T19:35:10.512Z"
   }
@@ -208,20 +208,20 @@ Search for similar documents using natural language. The API generates an embedd
 * **Query Parameters**: `q` (The search query)
 * **Curl Command**:
   ```bash
-  curl -X GET "http://localhost:8000/documents/search?q=AI%20in%20coding"
+  curl -X GET "http://localhost:8000/documents/search?q=expense%20deadline"
   ```
 * **Response (200 OK)**:
   ```json
   [
     {
       "id": "e0bfa934-8b64-4bf8-b99b-3ee9c27ee98d",
-      "content": "Artificial intelligence is transforming software engineering by automating repetitive tasks and proposing clean code structures.",
+      "content": "The company policy requires all employees to submit their monthly expense reports by the last Friday of each month.",
       "metadata": {
-        "user_id": "999",
-        "category": "technology",
-        "author": "Antigravity"
+        "user_id": "123",
+        "category": "finance",
+        "author": "John Doe"
       },
-      "score": 0.824719
+      "score": 0.894310
     }
   ]
   ```
