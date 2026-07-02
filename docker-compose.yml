@@ -37,7 +37,7 @@ services:
       - chroma_data:/chroma/chroma
 
   localstack:
-    image: localstack/localstack:latest
+    image: localstack/localstack:3.0.0
     ports:
       - "4566:4566"
     environment:
