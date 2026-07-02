@@ -10,9 +10,6 @@ from src.domain.entities.document import Document
 
 class MessageProcessor:
     def process_message(self, msg: Message) -> None:
-        """
-        Processes a single message from Kafka.
-        """
         try:
             data = self._decode_message(msg)
             document = self._create_document(data)
@@ -25,11 +22,9 @@ class MessageProcessor:
             logging.error(f"An unexpected error occurred while processing message: {e}")
 
     def _decode_message(self, msg: Message) -> Any:
-        """Decodes the message value from bytes to a Python object."""
         return json.loads(msg.value().decode('utf-8'))
 
     def _create_document(self, data: Any) -> Document:
-        """Creates a Document entity from the message data."""
         data_copy = data.copy() if isinstance(data, dict) else {}
         if "created_at" in data_copy and isinstance(data_copy["created_at"], str):
             try:
@@ -40,7 +35,6 @@ class MessageProcessor:
         return Document(**data_copy)
 
     def _log_document(self, document: Document) -> None:
-        """Logs the processed document in a structured way."""
         logging.info(
             "Successfully processed document",
             extra={
