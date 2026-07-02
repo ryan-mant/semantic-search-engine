@@ -84,7 +84,6 @@ async def test_publish_document_created_generic_produce_error() -> None:
 @pytest.mark.asyncio
 async def test_publish_document_created_flush_error() -> None:
     producer_mock = Mock()
-    # Mocking loop.run_in_executor to raise error
     publisher = KafkaEventPublisher(producer_mock, "test-topic")
     doc = Document(id="doc-123", content="hello world", metadata={})
 
@@ -105,7 +104,6 @@ async def test_publish_document_created_delivery_failure() -> None:
     doc = Document(id="doc-123", content="hello world", metadata={})
 
     def mock_produce(topic, key, value, callback):
-        # Simulate delivery error by invoking the callback
         mock_err = Mock()
         mock_err.str.return_value = "Broker: Message timed out"
         callback(mock_err, None)
