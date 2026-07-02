@@ -6,10 +6,11 @@ from src.infrastructure.config.settings import Settings, AWSSettings, KafkaSetti
 
 
 def test_settings_default() -> None:
-    settings = Settings()
-    assert settings.aws.region == "us-east-1"
-    assert settings.kafka.bootstrap_servers == "localhost:9092"
-    assert settings.kafka.topic == "document-events"
+    with mock.patch.dict(os.environ, {}, clear=True):
+        settings = Settings()
+        assert settings.aws.region == "us-east-1"
+        assert settings.kafka.bootstrap_servers == "localhost:9092"
+        assert settings.kafka.topic == "document-events"
 
 
 def test_settings_env_override() -> None:
