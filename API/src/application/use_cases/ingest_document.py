@@ -26,7 +26,7 @@ class IngestDocumentUseCase:
             key = f"raw/{document_id}.txt"
 
             stream = io.BytesIO(content.encode("utf-8"))
-            storage_url = self._storage_port.upload_stream(stream, key)
+            storage_url = await self._storage_port.upload_stream(stream, key)
 
             final_metadata = metadata.copy()
             final_metadata["storage_url"] = storage_url
