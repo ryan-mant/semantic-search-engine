@@ -65,19 +65,21 @@ def test_s3_adapter_initialization_failure() -> None:
         assert "Failed to initialize S3 client" in str(exc_info.value)
 
 
-def test_s3_adapter_upload_success() -> None:
+@pytest.mark.asyncio
+async def test_s3_adapter_upload_success() -> None:
     settings = Settings()
     settings.aws.s3_bucket = "test-bucket"
     mock_s3_client = Mock()
     with patch("boto3.client", return_value=mock_s3_client):
         adapter = S3StorageAdapter(settings)
         file_obj = Mock()
-        result = adapter.upload_stream(file_obj, "test-key.txt")
+        result = await adapter.upload_stream(file_obj, "test-key.txt")
         assert result == "s3://test-bucket/test-key.txt"
         mock_s3_client.upload_fileobj.assert_called_once_with(file_obj, "test-bucket", "test-key.txt")
 
 
-def test_s3_adapter_upload_failure() -> None:
+@pytest.mark.asyncio
+async def test_s3_adapter_upload_failure() -> None:
     settings = Settings()
     settings.aws.s3_bucket = "test-bucket"
     mock_s3_client = Mock()
@@ -86,5 +88,5 @@ def test_s3_adapter_upload_failure() -> None:
         adapter = S3StorageAdapter(settings)
         file_obj = Mock()
         with pytest.raises(StorageError) as exc_info:
-            adapter.upload_stream(file_obj, "test-key.txt")
+            await adapter.upload_stream(file_obj, "test-key.txt")
         assert "S3 upload failed for key 'test-key.txt'" in str(exc_info.value)
