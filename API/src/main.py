@@ -40,6 +40,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         port=settings.chroma.port
     )
     app.state.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+    from src.infrastructure.adapters.aws.s3 import S3StorageAdapter
+    app.state.storage_adapter = S3StorageAdapter(settings)
 
     yield
 
