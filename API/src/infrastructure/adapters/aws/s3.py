@@ -1,3 +1,4 @@
+import asyncio
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from typing import BinaryIO
@@ -36,9 +37,9 @@ class S3StorageAdapter(StoragePort):
         except (BotoCoreError, ClientError) as e:
             raise StorageError(f"Failed to initialize S3 client: {e}") from e
 
-    def upload_stream(self, file_obj: BinaryIO, key: str) -> str:
+    async def upload_stream(self, file_obj: BinaryIO, key: str) -> str:
         try:
-            self._s3_client.upload_fileobj(file_obj, self._bucket_name, key)
+            await asyncio.to_thread(self._s3_client.upload_fileobj, file_obj, self._bucket_name, key)
             return f"s3://{self._bucket_name}/{key}"
         except (BotoCoreError, ClientError) as e:
             raise StorageError(f"S3 upload failed for key '{key}': {e}") from e
