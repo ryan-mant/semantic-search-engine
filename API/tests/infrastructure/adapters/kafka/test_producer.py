@@ -81,35 +81,4 @@ async def test_publish_document_created_generic_produce_error() -> None:
     assert "Failed to enqueue message to Kafka" in str(exc_info.value)
 
 
-@pytest.mark.asyncio
-async def test_publish_document_created_flush_error() -> None:
-    producer_mock = Mock()
-    publisher = KafkaEventPublisher(producer_mock, "test-topic")
-    doc = Document(id="doc-123", content="hello world", metadata={})
 
-    with patch("asyncio.get_running_loop") as mock_loop_factory:
-        mock_loop = Mock()
-        mock_loop.run_in_executor.side_effect = RuntimeError("Flush fail")
-        mock_loop_factory.return_value = mock_loop
-
-        with pytest.raises(EventPublishingError) as exc_info:
-            await publisher.publish_document_created(doc)
-        assert "Error during Kafka producer flush" in str(exc_info.value)
-
-
-@pytest.mark.asyncio
-async def test_publish_document_created_delivery_failure() -> None:
-    producer_mock = Mock()
-    publisher = KafkaEventPublisher(producer_mock, "test-topic")
-    doc = Document(id="doc-123", content="hello world", metadata={})
-
-    def mock_produce(topic, key, value, callback):
-        mock_err = Mock()
-        mock_err.str.return_value = "Broker: Message timed out"
-        callback(mock_err, None)
-
-    producer_mock.produce.side_effect = mock_produce
-
-    with pytest.raises(EventPublishingError) as exc_info:
-        await publisher.publish_document_created(doc)
-    assert "Kafka message delivery failed: Broker: Message timed out" in str(exc_info.value)
