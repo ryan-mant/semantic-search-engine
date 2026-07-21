@@ -69,10 +69,8 @@ def get_event_publisher(
     return KafkaEventPublisher(producer, settings.kafka.topic)
 
 
-def get_storage_port(
-    settings: Settings = Depends(get_settings),
-) -> StoragePort:
-    return S3StorageAdapter(settings)
+def get_storage_port(request: Request) -> StoragePort:
+    return request.app.state.storage_adapter
 
 
 def get_ingest_use_case(
