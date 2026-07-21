@@ -1,11 +1,13 @@
 import json
-import asyncio
+import logging
 from typing import Any, Dict
 from confluent_kafka import Producer
 
 from src.domain.entities.document import Document
 from src.domain.ports.event_publisher import EventPublisher
 from src.domain.exceptions import EventPublishingError
+
+logger = logging.getLogger(__name__)
 
 
 class KafkaEventPublisher(EventPublisher):
@@ -29,11 +31,9 @@ class KafkaEventPublisher(EventPublisher):
     async def publish_document_created(self, document: Document) -> None:
         serialized_data = self._serialize_document(document)
         
-        delivery_errors = []
-
         def delivery_report(err: Any, msg: Any) -> None:
             if err is not None:
-                delivery_errors.append(err)
+                logger.error(f"Kafka message delivery failed for doc {document.id}: {err}")
 
         try:
             self._producer.produce(
@@ -42,18 +42,8 @@ class KafkaEventPublisher(EventPublisher):
                 value=serialized_data,
                 callback=delivery_report
             )
+            self._producer.poll(0)
         except BufferError as e:
             raise EventPublishingError(f"Kafka local producer queue is full: {e}") from e
         except Exception as e:
             raise EventPublishingError(f"Failed to enqueue message to Kafka: {e}") from e
-
-        loop = asyncio.get_running_loop()
-        try:
-            await loop.run_in_executor(None, self._producer.flush)
-        except Exception as e:
-            raise EventPublishingError(f"Error during Kafka producer flush: {e}") from e
-
-        if delivery_errors:
-            kafka_error = delivery_errors[0]
-            error_msg = kafka_error.str() if hasattr(kafka_error, "str") else str(kafka_error)
-            raise EventPublishingError(f"Kafka message delivery failed: {error_msg}")
