@@ -251,3 +251,38 @@ cd API && poetry install && poetry run pytest
 # Inside worker/ directory
 cd worker && poetry install && poetry run pytest
 ```
+
+---
+
+## ⚡ Load Testing & Performance Optimization
+
+To validate the high-throughput capabilities and check the decoupling under stress, we ran load tests using **k6** simulating **100 concurrent virtual users (VUs)** for 30 seconds.
+
+### Mixed Workload Benchmark (60% Ingestion / 40% Semantic Search)
+
+| Metric | Before Optimization | After Optimization | Improvement |
+| :--- | :--- | :--- | :--- |
+| **Total Completed Requests** | 1,950 | **4,392** | **+125%** (More than double throughput) |
+| **Throughput (req/s)** | 64.93 req/s | **146.36 req/s** | **+125%** |
+| **Average Ingest Latency** | 1,167 ms | **398.90 ms** | **~3x Faster** |
+| **Median Ingest Latency** | 1,234 ms | **417.57 ms** | **~3x Faster** |
+| **Minimum Ingest Latency** | 16.49 ms | **5.82 ms** | **~3x Faster** |
+| **p(95) Ingest Latency** | 1,821 ms | **685.51 ms** | **~2.7x Faster** |
+| **Average Search Latency** | 674.77 ms | **450.95 ms** | **~1.5x Faster** |
+
+### 🛠️ Key Architectural Optimizations Implemented
+
+1. **Non-Blocking S3 Upload (Thread Pool Offloading):** 
+   Converted the `S3StorageAdapter.upload_stream` method into an async coroutine. Wrapping boto3's synchronous `upload_fileobj` inside `asyncio.to_thread` offloads I/O-bound disk and network operations to Python's internal thread pool, freeing the main ASGI event loop.
+2. **Re-use of S3 Adapter Singleton:** 
+   Restructured the FastAPI dependency tree so the `S3StorageAdapter` is instantiated once during application startup lifespan (`app.state.storage_adapter`) and re-used as a singleton. This eliminates redundant boto3 client creations and `create_bucket` S3 network calls on every HTTP request.
+3. **Asynchronous Kafka Event Production (Removing Blocking Flush):** 
+   Removed the per-request synchronous `flush()` call inside `KafkaEventPublisher.publish_document_created`. The publisher now enqueues events asynchronously using confluent-kafka's C-backed memory buffer and triggers callbacks via non-blocking `.poll(0)`. A final `flush(timeout=5)` is executed once when the application shuts down.
+
+### 🏃 Running Load Tests
+
+To run the load test locally, make sure the services are running (`docker compose up -d`) and k6 is installed:
+
+```bash
+k6 run teste-carga.js
+```
