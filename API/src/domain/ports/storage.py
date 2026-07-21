@@ -5,5 +5,5 @@ from typing import BinaryIO
 class StoragePort(ABC):
 
     @abstractmethod
-    def upload_stream(self, file_obj: BinaryIO, key: str) -> str:
+    async def upload_stream(self, file_obj: BinaryIO, key: str) -> str:
         pass
