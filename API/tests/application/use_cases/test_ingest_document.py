@@ -17,7 +17,7 @@ async def test_ingest_document_success() -> None:
     fixed_uuid = uuid.UUID(fixed_uuid_str)
 
     mock_repo = AsyncMock(spec=DocumentRepository)
-    mock_storage = Mock(spec=StoragePort)
+    mock_storage = AsyncMock(spec=StoragePort)
     mock_storage.upload_stream.return_value = f"s3://test-bucket/raw/{fixed_uuid_str}.txt"
     mock_publisher = AsyncMock(spec=EventPublisher)
 
@@ -49,7 +49,7 @@ async def test_ingest_document_failure_repo_error() -> None:
     mock_repo = AsyncMock(spec=DocumentRepository)
     mock_repo.save.side_effect = DatabaseConnectionError("Connection timeout")
 
-    mock_storage = Mock(spec=StoragePort)
+    mock_storage = AsyncMock(spec=StoragePort)
     mock_storage.upload_stream.return_value = f"s3://test-bucket/raw/{fixed_uuid_str}.txt"
     
     mock_publisher = AsyncMock(spec=EventPublisher)
@@ -79,7 +79,7 @@ async def test_ingest_document_failure_generic_error() -> None:
     mock_repo = AsyncMock(spec=DocumentRepository)
     mock_repo.save.side_effect = ValueError("Unexpected value error")
 
-    mock_storage = Mock(spec=StoragePort)
+    mock_storage = AsyncMock(spec=StoragePort)
     mock_storage.upload_stream.return_value = f"s3://test-bucket/raw/{fixed_uuid_str}.txt"
     
     mock_publisher = AsyncMock(spec=EventPublisher)
