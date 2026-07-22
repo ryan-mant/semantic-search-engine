@@ -286,3 +286,28 @@ To run the load test locally, make sure the services are running (`docker compos
 ```bash
 k6 run teste-carga.js
 ```
+
+### 📉 Constrained Environment Benchmarks (Realistic Production Simulation)
+
+To simulate a realistic cloud deployment (e.g., small Kubernetes pods or AWS ECS tasks), we configured strict resource limits on the Docker containers in `docker-compose.yml`:
+* **API Service:** Restricted to **0.5 CPU cores** and **1 GB RAM**.
+* **Worker Service:** Restricted to **1.0 CPU cores** and **1.5 GB RAM**.
+
+Running the exact same workload (100 VUs, 30s) in this constrained environment produced the following results:
+
+| Metric | Constrained Environment | Analysis & Architectural Insights |
+| :--- | :--- | :--- |
+| **Total Completed Requests** | 775 | Lower overall throughput due to strict CPU throttling. |
+| **Throughput (req/s)** | 25.75 req/s | Constrained but highly stable with **0.00% request errors**. |
+| **Average Ingest Latency** | 2,398.34 ms | Higher average due to shared host disk/network scheduling. |
+| **Minimum Ingest Latency** | **5.62 ms** | Confirms the async non-blocking path is fast when the queue is clear. |
+| **p(95) Ingest Latency** | 4,065.39 ms | Shows queueing latency at the container gateway when throttled. |
+| **Average Search Latency** | 2,756.77 ms | Heavy CPU impact due to in-process query vector embedding generation. |
+
+#### 💡 Key Architectural Takeaways
+
+1. **Embedding Generation Bottleneck:** Because the search endpoint generates embeddings in-process via `SentenceTransformer` on a CPU-bound thread, the 0.5 CPU restriction creates CPU saturation when many requests queue up.
+2. **Production Recommendations:** To scale search throughput in a real-world system:
+   * **Offload Embeddings:** Outsource query embedding generation to a dedicated model serving tier (like AWS SageMaker, Triton, or Hugging Face TEI) running on optimized or GPU-enabled instances.
+   * **Lightweight / External Models:** Use lightweight embedding models or standard third-party APIs (like OpenAI embeddings) to convert search CPU-bound tasks into simple, fast, non-blocking HTTP requests.
+
