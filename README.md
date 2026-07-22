@@ -301,6 +301,9 @@ To simulate different cloud deployment sizes (e.g., AWS ECS or Kubernetes contai
 | **Average Search Latency** | 450.95 ms | **525.34 ms** | 2,756.77 ms |
 | **Error Rate (%)** | 0.00% | 0.00% | 0.00% |
 
+> [!IMPORTANT]
+> **Understanding the Bottleneck (Local Embedding Model):** The performance degradation observed under strict resource constraints (e.g., 0.5 CPU) is **exclusively** caused by running the PyTorch-based embedding model (`SentenceTransformers`) locally in-process. Machine learning vector generation is a heavy, CPU-bound calculation. In a pure I/O-bound async ingestion path (without in-process inference), the API maintains high throughput and low latencies even under strict resource limits.
+
 #### 💡 Key Architectural Takeaways
 
 1. **Efficient Scaling with Standard Container Sizes:**
