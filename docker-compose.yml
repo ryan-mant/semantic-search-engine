@@ -74,7 +74,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.50'
+          cpus: '2.00'
           memory: 1G
 
   api-test:
@@ -128,8 +128,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.00'
-          memory: 1.5G
+          cpus: '2.00'
+          memory: 2G
 
   worker-test:
     build:
