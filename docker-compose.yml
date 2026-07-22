@@ -71,6 +71,11 @@ services:
       - kafka
       - chroma
       - localstack
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 1G
 
   api-test:
     build:
@@ -120,6 +125,11 @@ services:
       - mongodb
       - chroma
       - localstack
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 1.5G
 
   worker-test:
     build:
