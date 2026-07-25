@@ -234,7 +234,7 @@ async def test_consumer_poll_invalid_date(repo_mock, embedding_mock, vector_mock
 
 
 @pytest.mark.asyncio
-async def test_consumer_poll_processing_exception(repo_mock, embedding_mock, vector_mock) -> None:
+async def test_consumer_poll_poison_pill(repo_mock, embedding_mock, vector_mock) -> None:
     consumer_mock = Mock()
     settings = WorkerSettings()
     logger_mock = Mock()
@@ -257,13 +257,55 @@ async def test_consumer_poll_processing_exception(repo_mock, embedding_mock, vec
     await wrapper.start()
     
     logger_mock.error.assert_called_once_with(
-        "Error processing message",
+        "Invalid message format (poison pill), skipping",
         {
             "error": ANY,
             "partition": 2,
             "offset": 100
         }
     )
+    consumer_mock.commit.assert_called_once_with(msg_mock, False)
+
+
+@pytest.mark.asyncio
+async def test_consumer_poll_transient_exception(repo_mock, embedding_mock, vector_mock) -> None:
+    consumer_mock = Mock()
+    settings = WorkerSettings()
+    logger_mock = Mock()
+    
+    repo_mock.save.side_effect = RuntimeError("Database connection lost")
+
+    wrapper = KafkaMessageConsumer(
+        consumer_mock, settings, logger_mock, repo_mock, embedding_mock, vector_mock
+    )
+    
+    msg_mock = Mock(spec=Message)
+    msg_mock.error.return_value = None
+    msg_mock.partition.return_value = 2
+    msg_mock.offset.return_value = 100
+    payload = {
+        "id": "doc-999",
+        "content": "some text",
+        "metadata": {}
+    }
+    msg_mock.value.return_value = json.dumps(payload).encode("utf-8")
+    
+    def poll_side_effect(timeout):
+        wrapper._running = False
+        return msg_mock
+        
+    consumer_mock.poll.side_effect = poll_side_effect
+    await wrapper.start()
+    
+    logger_mock.error.assert_called_once_with(
+        "Transient error processing message (offset NOT committed)",
+        {
+            "error": ANY,
+            "partition": 2,
+            "offset": 100
+        }
+    )
+    consumer_mock.commit.assert_not_called()
 
 
 def test_main_success() -> None:

@@ -97,7 +97,10 @@ Both microservices implement their own isolated **Hexagonal Architecture (Ports 
   - Worker ports: [DocumentRepository](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/worker/src/domain/ports/document_repository.py), [EmbeddingPort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/worker/src/domain/ports/embedding.py), [VectorStorePort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/worker/src/domain/ports/vector_store.py).
 * **Application Layer**: Contains use cases coordinating the domain model (e.g. [IngestDocumentUseCase](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/application/use_cases/ingest_document.py) and [SearchDocumentsUseCase](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/application/use_cases/search_documents.py)).
 * **Infrastructure Layer**: Framework-specific adapters implementing the domain ports (MongoDB, confluent-kafka, AWS S3, ChromaDB).
-* **Resilient Worker Loop**: The Kafka consumer includes fallback handling to guarantee that processing errors on a single message do not block or crash the consumer daemon.
+* **Resilient Worker Loop & Fault Tolerance (At-Least-Once Processing)**:
+  - **Manual Offset Commit (`enable.auto.commit = False`)**: The worker explicitly disables Kafka's automatic offset committing. Offsets are committed manually only *after* a document has been successfully processed, saved to MongoDB, and indexed into ChromaDB.
+  - **High-Traffic Crash Protection**: If a worker instance crashes or experiences network failure during traffic spikes (e.g. Black Friday), Kafka offsets remain uncommitted. When the worker recovers, Kafka redelivers the uncommitted messages, ensuring zero vector indexing loss.
+  - **Poison Pill vs. Transient Error Handling**: Corrupted or malformed payloads (e.g., `json.JSONDecodeError` or validation errors) are logged as poison pills and committed to avoid blocking the queue indefinitely, while transient infrastructure failures (ChromaDB/MongoDB connection loss) leave offsets uncommitted for automatic retry upon recovery.
 
 ---
 

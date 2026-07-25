@@ -75,7 +75,9 @@ def test_routes_dependencies_setup() -> None:
     assert pub is not None
 
     with patch("boto3.client"):
-        storage = get_storage_port(settings)
+        request_mock = Mock()
+        request_mock.app.state.storage_adapter = Mock()
+        storage = get_storage_port(request_mock)
         assert storage is not None
 
 

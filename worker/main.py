@@ -112,9 +112,24 @@ class KafkaMessageConsumer:
 
                 try:
                     await self._process_message(msg)
+                    await loop.run_in_executor(
+                        None, self._consumer.commit, msg, False
+                    )
+                except (json.JSONDecodeError, ValueError, TypeError) as e:
+                    self._logger.error(
+                        "Invalid message format (poison pill), skipping",
+                        {
+                            "error": str(e),
+                            "partition": msg.partition(),
+                            "offset": msg.offset(),
+                        },
+                    )
+                    await loop.run_in_executor(
+                        None, self._consumer.commit, msg, False
+                    )
                 except Exception as e:
                     self._logger.error(
-                        "Error processing message",
+                        "Transient error processing message (offset NOT committed)",
                         {
                             "error": str(e),
                             "partition": msg.partition(),
@@ -213,7 +228,7 @@ async def main() -> None:
         "bootstrap.servers": settings.kafka.bootstrap_servers,
         "group.id": settings.kafka.group_id,
         "auto.offset.reset": settings.kafka.auto_offset_reset,
-        "enable.auto.commit": True,
+        "enable.auto.commit": False,
     }
 
     try:
