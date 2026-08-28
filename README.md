@@ -25,11 +25,11 @@ The end-to-end flow of document ingestion, asynchronous background processing, a
 
 ```mermaid
 graph TD
-    subgraph Client / User
+    subgraph Client_User ["Client / User"]
         User([User / Client])
     end
 
-    subgraph API [API Container]
+    subgraph API_Container ["API Container"]
         FastAPI[FastAPI Router]
         IngestUC[IngestDocumentUseCase]
         SearchUC[SearchDocumentsUseCase]
@@ -41,18 +41,18 @@ graph TD
         ChromaStore_API[ChromaDB Adapter]
     end
 
-    subgraph Messaging [Apache Kafka]
+    subgraph Messaging ["Apache Kafka"]
         Kafka[Kafka Broker]
     end
 
-    subgraph Worker [Worker Container]
+    subgraph Worker_Container ["Worker Container"]
         Consumer[Kafka Consumer]
         MongoRep_Worker[MongoDB Repository]
         ST_Worker[SentenceTransformer Adapter]
         ChromaStore_Worker[ChromaDB Adapter]
     end
 
-    subgraph Databases & Storage [External Infrastructure]
+    subgraph Databases_Storage ["External Infrastructure (Databases & Storage)"]
         S3[(AWS S3 Storage)]
         Mongo[(MongoDB)]
         Chroma[(ChromaDB Vector DB)]
@@ -76,12 +76,12 @@ graph TD
     Consumer -->|9. Update status: INDEXED| MongoRep_Worker
     MongoRep_Worker -->|Update Status| Mongo
 
-    User -->|10. GET /documents/search?q=...&limit=5| FastAPI
+    User -->|"10. GET /documents/search?q=...&limit=5"| FastAPI
     FastAPI -->|Executes| SearchUC
     SearchUC -->|11. Generate Vector / Check LRU Cache| ST_API
     SearchUC -->|12. Query Similar Vectors| ChromaStore_API
     ChromaStore_API -->|Search (Cosine Space)| Chroma
-    FastAPI -->|13. Return Matches (score & distance)| User
+    FastAPI -->|"13. Return Matches (score & distance)"| User
 
     User -->|14. GET /documents/{id}| FastAPI
     FastAPI -->|15. Fetch Metadata & Status| MongoRep_API
@@ -91,15 +91,15 @@ graph TD
 ### 📦 Monorepo & Hexagonal Layer Structure
 
 This repository is organized as a monorepo containing two **completely decoupled and self-contained microservices** that share no build-time code or runtime dependencies, ensuring high autonomy:
-1. **API Service ([API/](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API))**: Exposes REST ingestion, search, and status tracking routes.
-2. **Worker Service ([worker/](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/worker))**: Consumes batches of document events from Kafka, generates vector representations in batch, indexes them in ChromaDB, and updates document status in MongoDB.
+1. **API Service ([API/](./API))**: Exposes REST ingestion, search, and status tracking routes.
+2. **Worker Service ([worker/](./worker))**: Consumes batches of document events from Kafka, generates vector representations in batch, indexes them in ChromaDB, and updates document status in MongoDB.
 
 Both microservices implement their own isolated **Hexagonal Architecture (Ports & Adapters)** layer structure:
 
-* **Domain Layer (Core)**: Completely isolated from frameworks, containing core entities (e.g., [Document](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/entities/document.py) in the API, and [Document](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/worker/src/domain/entities/document.py) in the Worker), exceptions, and abstract ports:
-  - API ports: [StoragePort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/storage.py), [EventPublisher](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/event_publisher.py), [DocumentRepository](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/document_repository.py), [EmbeddingPort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/embedding.py), [VectorStorePort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/domain/ports/vector_store.py).
-  - Worker ports: [DocumentRepository](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/worker/src/domain/ports/document_repository.py), [EmbeddingPort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/worker/src/domain/ports/embedding.py), [VectorStorePort](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/worker/src/domain/ports/vector_store.py).
-* **Application Layer**: Contains use cases coordinating the domain model (e.g. [IngestDocumentUseCase](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/application/use_cases/ingest_document.py), [GetDocumentUseCase](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/application/use_cases/get_document.py), and [SearchDocumentsUseCase](file:///home/ryan-dev/Documentos/projetos/motor-ingestao-busca/API/src/application/use_cases/search_documents.py)).
+* **Domain Layer (Core)**: Completely isolated from frameworks, containing core entities (e.g., [Document](./API/src/domain/entities/document.py) in the API, and [Document](./worker/src/domain/entities/document.py) in the Worker), exceptions, and abstract ports:
+  - API ports: [StoragePort](./API/src/domain/ports/storage.py), [EventPublisher](./API/src/domain/ports/event_publisher.py), [DocumentRepository](./API/src/domain/ports/document_repository.py), [EmbeddingPort](./API/src/domain/ports/embedding.py), [VectorStorePort](./API/src/domain/ports/vector_store.py).
+  - Worker ports: [DocumentRepository](./worker/src/domain/ports/document_repository.py), [EmbeddingPort](./worker/src/domain/ports/embedding.py), [VectorStorePort](./worker/src/domain/ports/vector_store.py).
+* **Application Layer**: Contains use cases coordinating the domain model (e.g. [IngestDocumentUseCase](./API/src/application/use_cases/ingest_document.py), [GetDocumentUseCase](./API/src/application/use_cases/get_document.py), and [SearchDocumentsUseCase](./API/src/application/use_cases/search_documents.py)).
 * **Infrastructure Layer**: Framework-specific adapters implementing the domain ports (MongoDB, confluent-kafka, AWS S3, ChromaDB).
 * **Resilient Worker Loop & Fault Tolerance (At-Least-Once Processing)**:
   * **Batch Processing & SIMD CPU Acceleration**: Consumes messages in configurable batches (16 messages / 0.5s), computing embeddings via SIMD vectorization and bulk upserting to ChromaDB for high indexing throughput.
@@ -268,8 +268,8 @@ Search for similar documents using natural language. The API checks an in-memory
   ```
 
 > **Understanding Metrics:**
-> - `score` ($[0.0, 1.0]$): Normalized similarity ($1.0 - \text{distance}$). Values closer to **$1.0$ (100%)** indicate high relevance.
-> - `distance`: Raw cosine distance computed by the vector database. Values closer to **$0.0$** indicate exact vector proximity.
+> - `score` (`0.0` - `1.0`): Normalized similarity (`1.0 - distance`). Values closer to **1.0 (100%)** indicate high relevance.
+> - `distance`: Raw cosine distance computed by the vector database. Values closer to **0.0** indicate exact vector proximity.
 
 ---
 
@@ -341,7 +341,7 @@ k6 run teste-carga.js
 
 To simulate different cloud deployment sizes (e.g., AWS ECS or Kubernetes container sizes), we benchmarked the optimized API under different resource allocations in `docker-compose.yml` with the same load test (100 VUs, 30s):
 
-| Metric | Unconstrained (Host Machine) | Standard Container size (2.0 CPUs | 1GB-2GB RAM) | Constrained Container size (0.5 CPU | 1GB RAM) |
+| Metric | Unconstrained (Host Machine) | Standard Container size (2.0 CPUs / 1GB-2GB RAM) | Constrained Container size (0.5 CPU / 1GB RAM) |
 | :--- | :--- | :--- | :--- |
 | **Total Completed Requests** | **4,392** | **3,696** | **775** |
 | **Throughput (req/s)** | **146.36 req/s** | **123.00 req/s** | **25.75 req/s** |
