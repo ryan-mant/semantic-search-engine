@@ -12,7 +12,8 @@ from fastapi.testclient import TestClient
 @pytest.fixture()
 def client() -> TestClient:
     with patch("src.main.AsyncIOMotorClient") as mock_motor, \
-         patch("src.main.Producer") as mock_producer_cls:
+         patch("src.main.Producer") as mock_producer_cls, \
+         patch("src.infrastructure.adapters.aws.s3.S3StorageAdapter") as mock_s3:
         mock_mongo_client = MagicMock()
         mock_mongo_client.__getitem__ = MagicMock(
             return_value="mock_db"
@@ -21,6 +22,8 @@ def client() -> TestClient:
 
         mock_producer = MagicMock()
         mock_producer_cls.return_value = mock_producer
+
+        mock_s3.return_value = MagicMock()
 
         from src.main import app
 

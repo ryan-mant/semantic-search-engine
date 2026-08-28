@@ -4,10 +4,10 @@ from unittest.mock import Mock, AsyncMock, MagicMock, patch
 sys.modules["sentence_transformers"] = MagicMock()
 sys.modules["chromadb"] = MagicMock()
 
+from datetime import datetime, timezone
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 import pytest
-from datetime import datetime
 
 from src.infrastructure.adapters.fastapi.routes import (
     router,
@@ -18,16 +18,18 @@ from src.infrastructure.adapters.fastapi.routes import (
     get_event_publisher,
     get_storage_port,
     get_ingest_use_case,
+    get_get_document_use_case,
     get_embedding_port,
     get_vector_store_port,
     DocumentResponse,
     SearchResultResponse,
 )
 from src.application.use_cases.ingest_document import IngestDocumentUseCase
+from src.application.use_cases.get_document import GetDocumentUseCase
 from src.domain.entities.document import Document
 from src.domain.ports.embedding import EmbeddingPort
 from src.domain.ports.vector_store import VectorStorePort
-from src.domain.exceptions import DocumentIngestionError
+from src.domain.exceptions import DocumentIngestionError, DocumentNotFoundError
 from src.infrastructure.config.settings import Settings
 
 
@@ -85,11 +87,12 @@ def test_ingest_document_route_success() -> None:
     app = _create_test_app()
 
     mock_use_case = AsyncMock(spec=IngestDocumentUseCase)
-    created_at = datetime.utcnow()
+    created_at = datetime.now(timezone.utc)
     mock_use_case.execute.return_value = Document(
         id="doc-123",
         content="test content",
         metadata={"storage_url": "s3://url"},
+        status="PENDING",
         created_at=created_at,
     )
 
@@ -108,6 +111,7 @@ def test_ingest_document_route_success() -> None:
     assert data["id"] == "doc-123"
     assert data["content"] == "test content"
     assert data["metadata"] == {"storage_url": "s3://url"}
+    assert data["status"] == "PENDING"
     mock_use_case.execute.assert_called_once_with(
         "test content", {"key": "val"}
     )
@@ -164,7 +168,8 @@ def test_search_documents_route_success() -> None:
         {
             "id": "doc-1",
             "metadata": {"content": "matching document content", "source": "web"},
-            "score": 0.05
+            "score": 0.95,
+            "distance": 0.05,
         }
     ]
 
@@ -172,7 +177,7 @@ def test_search_documents_route_success() -> None:
     app.dependency_overrides[get_vector_store_port] = lambda: mock_vector_store
 
     client = TestClient(app)
-    response = client.get("/documents/search?q=test")
+    response = client.get("/documents/search?q=test&limit=10")
 
     assert response.status_code == 200
     data = response.json()
@@ -180,9 +185,10 @@ def test_search_documents_route_success() -> None:
     assert data[0]["id"] == "doc-1"
     assert data[0]["content"] == "matching document content"
     assert data[0]["metadata"] == {"source": "web"}
-    assert data[0]["score"] == 0.05
+    assert data[0]["score"] == 0.95
+    assert data[0]["distance"] == 0.05
     mock_embedding.generate.assert_called_once_with("test")
-    mock_vector_store.search.assert_called_once_with([0.1, 0.2, 0.3], top_k=5)
+    mock_vector_store.search.assert_called_once_with([0.1, 0.2, 0.3], top_k=10)
 
 
 def test_search_documents_route_empty_query() -> None:
@@ -206,3 +212,50 @@ def test_search_documents_route_exception() -> None:
     response = client.get("/documents/search?q=test")
     assert response.status_code == 500
     assert "Semantic search failed" in response.json()["detail"]
+
+
+def test_get_document_route_success() -> None:
+    app = _create_test_app()
+
+    mock_use_case = AsyncMock(spec=GetDocumentUseCase)
+    created_at = datetime.now(timezone.utc)
+    mock_use_case.execute.return_value = Document(
+        id="doc-999",
+        content="some document",
+        metadata={"category": "tech"},
+        status="INDEXED",
+        created_at=created_at,
+    )
+
+    app.dependency_overrides[get_get_document_use_case] = (
+        lambda: mock_use_case
+    )
+
+    client = TestClient(app)
+    response = client.get("/documents/doc-999")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == "doc-999"
+    assert data["content"] == "some document"
+    assert data["metadata"] == {"category": "tech"}
+    assert data["status"] == "INDEXED"
+    mock_use_case.execute.assert_called_once_with("doc-999")
+
+
+def test_get_document_route_not_found() -> None:
+    app = _create_test_app()
+
+    mock_use_case = AsyncMock(spec=GetDocumentUseCase)
+    mock_use_case.execute.side_effect = DocumentNotFoundError("Document not found")
+
+    app.dependency_overrides[get_get_document_use_case] = (
+        lambda: mock_use_case
+    )
+
+    client = TestClient(app)
+    response = client.get("/documents/non-existent")
+
+    assert response.status_code == 404
+    assert "Document not found" in response.json()["detail"]
+

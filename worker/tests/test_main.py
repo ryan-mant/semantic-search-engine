@@ -22,6 +22,7 @@ def repo_mock() -> AsyncMock:
 def embedding_mock() -> AsyncMock:
     mock = AsyncMock()
     mock.generate.return_value = [0.1] * 384
+    mock.generate_batch.return_value = [[0.1] * 384]
     return mock
 
 
@@ -65,11 +66,11 @@ async def test_consumer_poll_none(repo_mock, embedding_mock, vector_mock) -> Non
         consumer_mock, settings, logger_mock, repo_mock, embedding_mock, vector_mock
     )
     
-    def poll_side_effect(timeout):
+    def consume_side_effect(num_messages, timeout):
         wrapper._running = False
-        return None
+        return []
         
-    consumer_mock.poll.side_effect = poll_side_effect
+    consumer_mock.consume.side_effect = consume_side_effect
     await wrapper.start()
     
     consumer_mock.subscribe.assert_called_once_with([settings.kafka.topic])
@@ -91,11 +92,11 @@ async def test_consumer_poll_partition_eof(repo_mock, embedding_mock, vector_moc
     err_mock.code.return_value = KafkaError._PARTITION_EOF
     msg_mock.error.return_value = err_mock
     
-    def poll_side_effect(timeout):
+    def consume_side_effect(num_messages, timeout):
         wrapper._running = False
-        return msg_mock
+        return [msg_mock]
         
-    consumer_mock.poll.side_effect = poll_side_effect
+    consumer_mock.consume.side_effect = consume_side_effect
     await wrapper.start()
     
     logger_mock.error.assert_not_called()
@@ -117,11 +118,11 @@ async def test_consumer_poll_kafka_error(repo_mock, embedding_mock, vector_mock)
     err_mock.__str__.return_value = "connection timeout"
     msg_mock.error.return_value = err_mock
     
-    def poll_side_effect(timeout):
+    def consume_side_effect(num_messages, timeout):
         wrapper._running = False
-        return msg_mock
+        return [msg_mock]
         
-    consumer_mock.poll.side_effect = poll_side_effect
+    consumer_mock.consume.side_effect = consume_side_effect
     await wrapper.start()
     
     logger_mock.error.assert_called_once_with(
@@ -144,11 +145,11 @@ async def test_consumer_poll_empty_payload(repo_mock, embedding_mock, vector_moc
     msg_mock.error.return_value = None
     msg_mock.value.return_value = None
     
-    def poll_side_effect(timeout):
+    def consume_side_effect(num_messages, timeout):
         wrapper._running = False
-        return msg_mock
+        return [msg_mock]
         
-    consumer_mock.poll.side_effect = poll_side_effect
+    consumer_mock.consume.side_effect = consume_side_effect
     await wrapper.start()
     
     logger_mock.warning.assert_called_once_with("Empty payload received")
@@ -174,63 +175,21 @@ async def test_consumer_poll_valid_payload(repo_mock, embedding_mock, vector_moc
     }
     msg_mock.value.return_value = json.dumps(payload).encode("utf-8")
     
-    def poll_side_effect(timeout):
+    def consume_side_effect(num_messages, timeout):
         wrapper._running = False
-        return msg_mock
+        return [msg_mock]
         
-    consumer_mock.poll.side_effect = poll_side_effect
+    consumer_mock.consume.side_effect = consume_side_effect
     await wrapper.start()
     
-    repo_mock.save.assert_called_once()
-    embedding_mock.generate.assert_called_once_with("document text")
-    vector_mock.upsert.assert_called_once_with(
-        doc_id="doc-123",
-        vector=ANY,
-        metadata={"content": "document text", "source": "kafka"}
+    repo_mock.update_status.assert_called_once_with("doc-123", "INDEXED")
+    embedding_mock.generate_batch.assert_called_once_with(["document text"])
+    vector_mock.upsert_batch.assert_called_once_with(
+        doc_ids=["doc-123"],
+        vectors=ANY,
+        metadatas=[{"content": "document text", "source": "kafka"}]
     )
-    
-    logger_mock.info.assert_any_call(
-        "Document processed successfully",
-        extra={
-            "document": {
-                "id": "doc-123",
-                "content_length": 13,
-                "metadata": {"source": "kafka"},
-                "created_at": "2026-06-30T23:59:59+00:00"
-            }
-        }
-    )
-
-
-@pytest.mark.asyncio
-async def test_consumer_poll_invalid_date(repo_mock, embedding_mock, vector_mock) -> None:
-    consumer_mock = Mock()
-    settings = WorkerSettings()
-    logger_mock = Mock()
-    
-    wrapper = KafkaMessageConsumer(
-        consumer_mock, settings, logger_mock, repo_mock, embedding_mock, vector_mock
-    )
-    
-    msg_mock = Mock(spec=Message)
-    msg_mock.error.return_value = None
-    payload = {
-        "id": "doc-123",
-        "content": "document text",
-        "metadata": {"source": "kafka"},
-        "created_at": "invalid-date"
-    }
-    msg_mock.value.return_value = json.dumps(payload).encode("utf-8")
-    
-    def poll_side_effect(timeout):
-        wrapper._running = False
-        return msg_mock
-        
-    consumer_mock.poll.side_effect = poll_side_effect
-    await wrapper.start()
-    
-    called_args = [args[0] for args, kwargs in logger_mock.info.call_args_list]
-    assert "Document processed successfully" in called_args
+    consumer_mock.commit.assert_called_once_with(msg_mock, False)
 
 
 @pytest.mark.asyncio
@@ -249,11 +208,11 @@ async def test_consumer_poll_poison_pill(repo_mock, embedding_mock, vector_mock)
     msg_mock.offset.return_value = 100
     msg_mock.value.return_value = b"{"
     
-    def poll_side_effect(timeout):
+    def consume_side_effect(num_messages, timeout):
         wrapper._running = False
-        return msg_mock
+        return [msg_mock]
         
-    consumer_mock.poll.side_effect = poll_side_effect
+    consumer_mock.consume.side_effect = consume_side_effect
     await wrapper.start()
     
     logger_mock.error.assert_called_once_with(
@@ -273,7 +232,7 @@ async def test_consumer_poll_transient_exception(repo_mock, embedding_mock, vect
     settings = WorkerSettings()
     logger_mock = Mock()
     
-    repo_mock.save.side_effect = RuntimeError("Database connection lost")
+    vector_mock.upsert_batch.side_effect = RuntimeError("Database connection lost")
 
     wrapper = KafkaMessageConsumer(
         consumer_mock, settings, logger_mock, repo_mock, embedding_mock, vector_mock
@@ -290,19 +249,20 @@ async def test_consumer_poll_transient_exception(repo_mock, embedding_mock, vect
     }
     msg_mock.value.return_value = json.dumps(payload).encode("utf-8")
     
-    def poll_side_effect(timeout):
+    def consume_side_effect(num_messages, timeout):
         wrapper._running = False
-        return msg_mock
+        return [msg_mock]
         
-    consumer_mock.poll.side_effect = poll_side_effect
-    await wrapper.start()
+    consumer_mock.consume.side_effect = consume_side_effect
+    
+    with patch("asyncio.sleep", new_callable=AsyncMock):
+        await wrapper.start()
     
     logger_mock.error.assert_called_once_with(
-        "Transient error processing message (offset NOT committed)",
+        "Transient error processing batch (offsets NOT committed)",
         {
             "error": ANY,
-            "partition": 2,
-            "offset": 100
+            "batch_size": 1
         }
     )
     consumer_mock.commit.assert_not_called()
@@ -353,3 +313,4 @@ def test_main_consumer_failure() -> None:
             asyncio.run(main())
             
         assert exc_info.value.code == 1
+
