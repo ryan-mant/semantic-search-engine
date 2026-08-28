@@ -24,3 +24,12 @@ class LoggingError(DomainError):
 
 class DocumentIngestionError(DomainError):
     pass
+
+
+class EmptyQueryError(DomainError):
+    pass
+
+
+class SearchError(DomainError):
+    pass
+
