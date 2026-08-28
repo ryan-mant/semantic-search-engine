@@ -1,16 +1,9 @@
 import asyncio
 import json
-import os
 import signal
 import sys
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
-
-os.environ.setdefault("AWS_ACCESS_KEY_ID", "dummy_key")
-os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "dummy_secret")
-os.environ.setdefault("AWS_S3_BUCKET", "dummy-bucket")
-os.environ.setdefault("AWS_CLOUDWATCH_LOG_GROUP", "dummy_log_group")
-os.environ.setdefault("AWS_CLOUDWATCH_LOG_STREAM", "dummy_log_stream")
+from typing import Any, Dict, List, Optional, Tuple
 
 from confluent_kafka import Consumer, KafkaError, Message
 from pydantic import BaseModel, Field
@@ -29,6 +22,8 @@ from src.infrastructure.config.settings import Settings, KafkaSettings
 class WorkerKafkaSettings(KafkaSettings):
     group_id: str = "document-worker-group"
     auto_offset_reset: str = "earliest"
+    batch_size: int = 16
+    batch_timeout: float = 0.5
 
 
 class WorkerSettings(Settings):
@@ -89,7 +84,10 @@ class KafkaMessageConsumer:
     async def start(self) -> None:
         self._logger.info(
             "Starting Kafka consumer",
-            {"topic": self._settings.kafka.topic},
+            {
+                "topic": self._settings.kafka.topic,
+                "batch_size": self._settings.kafka.batch_size,
+            },
         )
         self._consumer.subscribe([self._settings.kafka.topic])
         self._running = True
@@ -97,60 +95,80 @@ class KafkaMessageConsumer:
         loop = asyncio.get_running_loop()
         try:
             while self._running:
-                msg = await loop.run_in_executor(None, self._consumer.poll, 1.0)
-                if msg is None:
+                msgs = await loop.run_in_executor(
+                    None,
+                    lambda: self._consumer.consume(
+                        num_messages=self._settings.kafka.batch_size,
+                        timeout=self._settings.kafka.batch_timeout,
+                    ),
+                )
+                if not msgs:
                     continue
 
-                if msg.error():
-                    if msg.error().code() == KafkaError._PARTITION_EOF:
+                valid_batch: List[Tuple[Message, Document]] = []
+
+                for msg in msgs:
+                    if msg.error():
+                        if msg.error().code() == KafkaError._PARTITION_EOF:
+                            continue
+                        self._logger.error(
+                            f"Kafka error: {msg.error()}",
+                            {"code": msg.error().code()},
+                        )
                         continue
-                    self._logger.error(
-                        f"Kafka error: {msg.error()}",
-                        {"code": msg.error().code()},
-                    )
+
+                    try:
+                        doc = self._parse_message(msg)
+                        if doc:
+                            valid_batch.append((msg, doc))
+                    except (json.JSONDecodeError, ValueError, TypeError) as e:
+                        self._logger.error(
+                            "Invalid message format (poison pill), skipping",
+                            {
+                                "error": str(e),
+                                "partition": msg.partition(),
+                                "offset": msg.offset(),
+                            },
+                        )
+                        await loop.run_in_executor(
+                            None,
+                            lambda: self._consumer.commit(message=msg, asynchronous=False)
+                        )
+
+                if not valid_batch:
                     continue
 
                 try:
-                    await self._process_message(msg)
+                    await self._process_batch(valid_batch)
+                    last_msg = valid_batch[-1][0]
                     await loop.run_in_executor(
-                        None, self._consumer.commit, msg, False
-                    )
-                except (json.JSONDecodeError, ValueError, TypeError) as e:
-                    self._logger.error(
-                        "Invalid message format (poison pill), skipping",
-                        {
-                            "error": str(e),
-                            "partition": msg.partition(),
-                            "offset": msg.offset(),
-                        },
-                    )
-                    await loop.run_in_executor(
-                        None, self._consumer.commit, msg, False
+                        None,
+                        lambda: self._consumer.commit(message=last_msg, asynchronous=False)
                     )
                 except Exception as e:
                     self._logger.error(
-                        "Transient error processing message (offset NOT committed)",
+                        "Transient error processing batch (offsets NOT committed)",
                         {
                             "error": str(e),
-                            "partition": msg.partition(),
-                            "offset": msg.offset(),
+                            "batch_size": len(valid_batch),
                         },
                     )
+                    await asyncio.sleep(1.0)
         finally:
             self.stop()
 
-    async def _process_message(self, msg: Message) -> None:
+    def _parse_message(self, msg: Message) -> Optional[Document]:
         payload_bytes = msg.value()
         if not payload_bytes:
             self._logger.warning("Empty payload received")
-            return
+            return None
 
         payload_str = payload_bytes.decode("utf-8")
         data = json.loads(payload_str)
 
         dto = DocumentMessageDTO(**data)
 
-        created_at = datetime.now()
+        created_at = datetime.now(timezone.utc)
         if dto.created_at:
             try:
                 created_at = datetime.fromisoformat(
@@ -159,43 +177,62 @@ class KafkaMessageConsumer:
             except ValueError:
                 pass
 
-        document = Document(
+        return Document(
             id=dto.id,
             content=dto.content,
             metadata=dto.metadata,
+            status="INDEXED",
             created_at=created_at,
         )
 
-        await self._repository.save(document)
+    async def _process_batch(
+        self, batch: List[Tuple[Message, Document]]
+    ) -> None:
+        documents = [doc for _, doc in batch]
+        texts = [doc.content for doc in documents]
 
-        vector = await self._embedding_port.generate(document.content)
+        vectors = await self._embedding_port.generate_batch(texts)
 
-        chroma_metadata = {
-            "content": document.content,
-        }
-        for k, v in document.metadata.items():
-            if isinstance(v, (str, int, float, bool)):
-                chroma_metadata[k] = v
+        doc_ids: List[str] = []
+        metadatas: List[Dict[str, Any]] = []
+
+        for doc in documents:
+            doc_id = doc.id or ""
+            doc_ids.append(doc_id)
+
+            chroma_metadata: Dict[str, Any] = {
+                "content": doc.content,
+            }
+            for k, v in doc.metadata.items():
+                if isinstance(v, (str, int, float, bool)):
+                    chroma_metadata[k] = v
+                else:
+                    chroma_metadata[k] = str(v)
+            metadatas.append(chroma_metadata)
+
+        await self._vector_store.upsert_batch(
+            doc_ids=doc_ids,
+            vectors=vectors,
+            metadatas=metadatas,
+        )
+
+        for doc in documents:
+            if doc.id:
+                await self._repository.update_status(doc.id, "INDEXED")
             else:
-                chroma_metadata[k] = str(v)
+                await self._repository.save(doc)
 
-        await self._vector_store.upsert(
-            doc_id=document.id,
-            vector=vector,
-            metadata=chroma_metadata,
-        )
-
-        self._logger.info(
-            "Document processed successfully",
-            extra={
-                "document": {
-                    "id": document.id,
-                    "content_length": len(document.content),
-                    "metadata": document.metadata,
-                    "created_at": document.created_at.isoformat(),
-                }
-            },
-        )
+            self._logger.info(
+                "Document processed successfully",
+                extra={
+                    "document": {
+                        "id": doc.id,
+                        "content_length": len(doc.content),
+                        "metadata": doc.metadata,
+                        "created_at": doc.created_at.isoformat(),
+                    }
+                },
+            )
 
     def stop(self) -> None:
         self._running = False
@@ -277,3 +314,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+
