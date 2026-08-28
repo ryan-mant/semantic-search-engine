@@ -1,13 +1,14 @@
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from confluent_kafka import Producer
 
 from src.application.use_cases.ingest_document import IngestDocumentUseCase
 from src.application.use_cases.search_documents import SearchDocumentsUseCase
+from src.application.use_cases.get_document import GetDocumentUseCase
 from src.domain.ports.document_repository import DocumentRepository
 from src.domain.ports.event_publisher import EventPublisher
 from src.domain.ports.storage import StoragePort
@@ -19,7 +20,12 @@ from src.infrastructure.adapters.aws.s3 import S3StorageAdapter
 from src.infrastructure.adapters.embeddings.sentence_transformer import SentenceTransformerEmbeddingAdapter
 from src.infrastructure.adapters.chroma.vector_store import ChromaVectorStoreAdapter
 from src.infrastructure.config.settings import Settings
-from src.domain.exceptions import DocumentIngestionError
+from src.domain.exceptions import (
+    DocumentIngestionError,
+    DocumentNotFoundError,
+    EmptyQueryError,
+    SearchError,
+)
 
 
 router = APIRouter()
@@ -34,6 +40,7 @@ class DocumentResponse(BaseModel):
     id: str
     content: str
     metadata: Dict[str, Any]
+    status: str = "PENDING"
     created_at: datetime
 
 
@@ -42,6 +49,7 @@ class SearchResultResponse(BaseModel):
     content: str
     metadata: Dict[str, Any]
     score: float
+    distance: float
 
 
 def get_settings(request: Request) -> Settings:
@@ -79,6 +87,12 @@ def get_ingest_use_case(
     storage: StoragePort = Depends(get_storage_port),
 ) -> IngestDocumentUseCase:
     return IngestDocumentUseCase(repository, publisher, storage)
+
+
+def get_get_document_use_case(
+    repository: DocumentRepository = Depends(get_document_repository),
+) -> GetDocumentUseCase:
+    return GetDocumentUseCase(repository)
 
 
 def get_embedding_port(request: Request) -> EmbeddingPort:
@@ -122,6 +136,7 @@ async def ingest_document(
             id=document.id,
             content=document.content,
             metadata=document.metadata,
+            status=document.status,
             created_at=document.created_at,
         )
     except DocumentIngestionError as e:
@@ -143,26 +158,59 @@ async def ingest_document(
 )
 async def search_documents(
     q: str,
+    limit: int = Query(5, ge=1, le=100, description="Maximum number of search results to return"),
     use_case: SearchDocumentsUseCase = Depends(get_search_use_case),
 ) -> List[SearchResultResponse]:
     try:
-        results = await use_case.execute(q, top_k=5)
+        results = await use_case.execute(q, top_k=limit)
         return [
             SearchResultResponse(
                 id=res["id"],
                 content=res["content"],
                 metadata=res["metadata"],
-                score=res["score"]
+                score=res["score"],
+                distance=res.get("distance", round(1.0 - res["score"], 6)),
             )
             for res in results
         ]
+    except (ValueError, EmptyQueryError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except (SearchError, Exception) as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Semantic search failed: {e}",
+        )
+
+
+@router.get(
+    "/documents/{document_id}",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_document(
+    document_id: str,
+    use_case: GetDocumentUseCase = Depends(get_get_document_use_case),
+) -> DocumentResponse:
+    try:
+        document = await use_case.execute(document_id)
+        return DocumentResponse(
+            id=document.id,
+            content=document.content,
+            metadata=document.metadata,
+            status=document.status,
+            created_at=document.created_at,
+        )
+    except DocumentNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Semantic search failed: {e}",
-        )
+
