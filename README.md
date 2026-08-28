@@ -59,33 +59,33 @@ graph TD
     end
 
     %% Flows
-    User -->|1. POST /documents/ingest| FastAPI
-    FastAPI -->|Executes| IngestUC
-    IngestUC -->|2. Upload Stream| S3Adapter
-    S3Adapter -->|Upload| S3
-    IngestUC -->|3. Save Document (status: PENDING)| MongoRep_API
-    MongoRep_API -->|Save| Mongo
-    IngestUC -->|4. Publish Event| KafkaPublisher
-    KafkaPublisher -->|Publish| Kafka
-    FastAPI -->|5. HTTP 201 Created| User
+    User -->|"1. POST /documents/ingest"| FastAPI
+    FastAPI -->|"Executes"| IngestUC
+    IngestUC -->|"2. Upload Stream"| S3Adapter
+    S3Adapter -->|"Upload"| S3
+    IngestUC -->|"3. Save Document - Status: PENDING"| MongoRep_API
+    MongoRep_API -->|"Save"| Mongo
+    IngestUC -->|"4. Publish Event"| KafkaPublisher
+    KafkaPublisher -->|"Publish"| Kafka
+    FastAPI -->|"5. HTTP 201 Created"| User
 
-    Kafka -->|6. Batch Consume Events| Consumer
-    Consumer -->|7. Batch Generate Vectors| ST_Worker
-    Consumer -->|8. Batch Index Vectors| ChromaStore_Worker
-    ChromaStore_Worker -->|Upsert Batch| Chroma
-    Consumer -->|9. Update status: INDEXED| MongoRep_Worker
-    MongoRep_Worker -->|Update Status| Mongo
+    Kafka -->|"6. Batch Consume Events"| Consumer
+    Consumer -->|"7. Batch Generate Vectors"| ST_Worker
+    Consumer -->|"8. Batch Index Vectors"| ChromaStore_Worker
+    ChromaStore_Worker -->|"Upsert Batch"| Chroma
+    Consumer -->|"9. Update Status: INDEXED"| MongoRep_Worker
+    MongoRep_Worker -->|"Update Status"| Mongo
 
-    User -->|"10. GET /documents/search?q=...&limit=5"| FastAPI
-    FastAPI -->|Executes| SearchUC
-    SearchUC -->|11. Generate Vector / Check LRU Cache| ST_API
-    SearchUC -->|12. Query Similar Vectors| ChromaStore_API
-    ChromaStore_API -->|Search (Cosine Space)| Chroma
-    FastAPI -->|"13. Return Matches (score & distance)"| User
+    User -->|"10. GET /documents/search"| FastAPI
+    FastAPI -->|"Executes"| SearchUC
+    SearchUC -->|"11. Generate Vector / Check LRU Cache"| ST_API
+    SearchUC -->|"12. Query Similar Vectors"| ChromaStore_API
+    ChromaStore_API -->|"Search Cosine Space"| Chroma
+    FastAPI -->|"13. Return Matches - Score and Distance"| User
 
-    User -->|14. GET /documents/{id}| FastAPI
-    FastAPI -->|15. Fetch Metadata & Status| MongoRep_API
-    FastAPI -->|16. Return Document Details| User
+    User -->|"14. GET /documents/:id"| FastAPI
+    FastAPI -->|"15. Fetch Metadata and Status"| MongoRep_API
+    FastAPI -->|"16. Return Document Details"| User
 ```
 
 ### 📦 Monorepo & Hexagonal Layer Structure
