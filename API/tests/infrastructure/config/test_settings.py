@@ -11,6 +11,13 @@ def test_settings_default() -> None:
         assert settings.aws.region == "us-east-1"
         assert settings.kafka.bootstrap_servers == "localhost:9092"
         assert settings.kafka.topic == "document-events"
+        assert settings.kafka.acks == "all"
+        assert settings.kafka.enable_idempotence is True
+        assert settings.kafka.compression_type == "lz4"
+        assert settings.kafka.linger_ms == 10
+        assert settings.kafka.batch_size == 32768
+        assert settings.kafka.delivery_timeout_ms == 120000
+        assert settings.kafka.max_in_flight_requests_per_connection == 5
 
 
 def test_settings_env_override() -> None:

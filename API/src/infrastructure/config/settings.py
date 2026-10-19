@@ -29,6 +29,13 @@ class KafkaSettings(BaseSettings):
 
     bootstrap_servers: str = "localhost:9092"
     topic: str = "document-events"
+    acks: str = "all"
+    enable_idempotence: bool = True
+    compression_type: str = "lz4"
+    linger_ms: int = 10
+    batch_size: int = 32768
+    delivery_timeout_ms: int = 120000
+    max_in_flight_requests_per_connection: int = 5
 
 
 class ChromaSettings(BaseSettings):

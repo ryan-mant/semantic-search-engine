@@ -31,7 +31,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     mongo_client = AsyncIOMotorClient(mongo_uri)
     app.state.db = mongo_client[settings.mongo.database]
     app.state.kafka_producer = Producer(
-        {"bootstrap.servers": settings.kafka.bootstrap_servers}
+        {
+            "bootstrap.servers": settings.kafka.bootstrap_servers,
+            "acks": settings.kafka.acks,
+            "enable.idempotence": settings.kafka.enable_idempotence,
+            "compression.type": settings.kafka.compression_type,
+            "linger.ms": settings.kafka.linger_ms,
+            "batch.size": settings.kafka.batch_size,
+            "delivery.timeout.ms": settings.kafka.delivery_timeout_ms,
+            "max.in.flight.requests.per.connection": (
+                settings.kafka.max_in_flight_requests_per_connection
+            ),
+        }
     )
     app.state.settings = settings
 
