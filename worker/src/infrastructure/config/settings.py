@@ -29,6 +29,7 @@ class KafkaSettings(BaseSettings):
 
     bootstrap_servers: str = "localhost:9092"
     topic: str = "document-events"
+    dlq_topic: str = "document-events-dlq"
 
 
 class ChromaSettings(BaseSettings):

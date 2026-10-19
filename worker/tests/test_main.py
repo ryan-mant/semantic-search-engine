@@ -189,23 +189,33 @@ async def test_consumer_poll_valid_payload(repo_mock, embedding_mock, vector_moc
         vectors=ANY,
         metadatas=[{"content": "document text", "source": "kafka"}]
     )
-    consumer_mock.commit.assert_called_once_with(msg_mock, False)
+    consumer_mock.commit.assert_called_once_with(
+        message=msg_mock, asynchronous=False
+    )
 
 
 @pytest.mark.asyncio
 async def test_consumer_poll_poison_pill(repo_mock, embedding_mock, vector_mock) -> None:
     consumer_mock = Mock()
+    dlq_producer_mock = Mock()
     settings = WorkerSettings()
     logger_mock = Mock()
     
     wrapper = KafkaMessageConsumer(
-        consumer_mock, settings, logger_mock, repo_mock, embedding_mock, vector_mock
+        consumer_mock,
+        settings,
+        logger_mock,
+        repo_mock,
+        embedding_mock,
+        vector_mock,
+        dlq_producer=dlq_producer_mock,
     )
     
     msg_mock = Mock(spec=Message)
     msg_mock.error.return_value = None
     msg_mock.partition.return_value = 2
     msg_mock.offset.return_value = 100
+    msg_mock.key.return_value = b"doc-poison-1"
     msg_mock.value.return_value = b"{"
     
     def consume_side_effect(num_messages, timeout):
@@ -223,7 +233,66 @@ async def test_consumer_poll_poison_pill(repo_mock, embedding_mock, vector_mock)
             "offset": 100
         }
     )
-    consumer_mock.commit.assert_called_once_with(msg_mock, False)
+    repo_mock.update_status.assert_called_once_with(
+        "doc-poison-1", "FAILED", error=ANY
+    )
+    dlq_producer_mock.produce.assert_called_once_with(
+        topic=settings.kafka.dlq_topic,
+        key="doc-poison-1",
+        value=ANY,
+    )
+    consumer_mock.commit.assert_called_once_with(
+        message=msg_mock, asynchronous=False
+    )
+
+
+@pytest.mark.asyncio
+async def test_consumer_mixed_batch_commits_only_once_after_processing(
+    repo_mock, embedding_mock, vector_mock
+) -> None:
+    consumer_mock = Mock()
+    dlq_producer_mock = Mock()
+    settings = WorkerSettings()
+    logger_mock = Mock()
+
+    wrapper = KafkaMessageConsumer(
+        consumer_mock,
+        settings,
+        logger_mock,
+        repo_mock,
+        embedding_mock,
+        vector_mock,
+        dlq_producer=dlq_producer_mock,
+    )
+
+    valid_msg = Mock(spec=Message)
+    valid_msg.error.return_value = None
+    valid_msg.partition.return_value = 0
+    valid_msg.offset.return_value = 1
+    valid_msg.value.return_value = json.dumps(
+        {"id": "doc-1", "content": "valid content", "metadata": {}}
+    ).encode("utf-8")
+
+    poison_msg = Mock(spec=Message)
+    poison_msg.error.return_value = None
+    poison_msg.partition.return_value = 0
+    poison_msg.offset.return_value = 2
+    poison_msg.key.return_value = b"doc-2"
+    poison_msg.value.return_value = b"invalid-json"
+
+    def consume_side_effect(num_messages, timeout):
+        wrapper._running = False
+        return [valid_msg, poison_msg]
+
+    consumer_mock.consume.side_effect = consume_side_effect
+    await wrapper.start()
+
+    vector_mock.upsert_batch.assert_called_once()
+    repo_mock.update_status.assert_any_call("doc-2", "FAILED", error=ANY)
+    repo_mock.update_status.assert_any_call("doc-1", "INDEXED")
+    consumer_mock.commit.assert_called_once_with(
+        message=poison_msg, asynchronous=False
+    )
 
 
 @pytest.mark.asyncio
@@ -240,6 +309,7 @@ async def test_consumer_poll_transient_exception(repo_mock, embedding_mock, vect
     
     msg_mock = Mock(spec=Message)
     msg_mock.error.return_value = None
+    msg_mock.topic.return_value = "document-events"
     msg_mock.partition.return_value = 2
     msg_mock.offset.return_value = 100
     payload = {
@@ -266,17 +336,20 @@ async def test_consumer_poll_transient_exception(repo_mock, embedding_mock, vect
         }
     )
     consumer_mock.commit.assert_not_called()
+    consumer_mock.seek.assert_called_once()
 
 
 def test_main_success() -> None:
     mock_consumer_cls = Mock()
     mock_consumer_instance = Mock()
     mock_consumer_cls.return_value = mock_consumer_instance
+    mock_producer_cls = Mock()
     
     mock_wrapper_instance = Mock()
     mock_wrapper_instance.start = AsyncMock()
     
     with patch("main.Consumer", mock_consumer_cls), \
+         patch("main.Producer", mock_producer_cls), \
          patch("main.KafkaMessageConsumer", return_value=mock_wrapper_instance), \
          patch("motor.motor_asyncio.AsyncIOMotorClient"), \
          patch("sentence_transformers.SentenceTransformer"), \
@@ -287,6 +360,7 @@ def test_main_success() -> None:
         asyncio.run(main())
         
         mock_consumer_cls.assert_called_once()
+        mock_producer_cls.assert_called_once()
         mock_wrapper_instance.start.assert_called_once()
         
         shutdown_calls = [
@@ -313,4 +387,5 @@ def test_main_consumer_failure() -> None:
             asyncio.run(main())
             
         assert exc_info.value.code == 1
+
 
